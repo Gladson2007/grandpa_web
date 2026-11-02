@@ -1,238 +1,272 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Grandpa's Memories</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f7f3ed">
+<title>Grandpa's Memories</title>
 
-  <style>
-    * { box-sizing: border-box; }
+<style>
+:root {
+  --ink: #29231f;
+  --muted: #756b62;
+  --paper: #fbf8f3;
+  --line: #e9e0d6;
+  --accent: #a85645;
+  --accent-dark: #864233;
+  --shadow: 0 18px 50px rgba(66, 48, 37, .08);
+  --radius: 22px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse at 10% 0%, rgba(229,204,177,.28), transparent 34rem),
+    radial-gradient(ellipse at 100% 30%, rgba(207,220,202,.25), transparent 32rem),
+    var(--paper);
+  font: 16px/1.6 Georgia, "Times New Roman", serif;
+}
+button, input { font: inherit; }
+button:focus-visible, input:focus-visible, .file-button:focus-within {
+  outline: 3px solid rgba(168,86,69,.35);
+  outline-offset: 3px;
+}
+main { width: min(1120px, calc(100% - 36px)); margin: 0 auto; padding: 24px 0 70px; }
+.topline {
+  display:flex; justify-content:space-between; align-items:center; gap:14px;
+  color:var(--muted); font:700 12px/1.2 system-ui,sans-serif;
+  letter-spacing:.12em; text-transform:uppercase;
+}
+.brand-mark { display:inline-flex; align-items:center; gap:9px; }
+.brand-icon {
+  display:grid; place-items:center; width:34px; height:34px;
+  border-radius:12px; color:white; background:var(--accent);
+  box-shadow:0 6px 14px rgba(168,86,69,.22); font-size:17px;
+}
+.hero {
+  position:relative; overflow:hidden; margin:26px 0 24px;
+  padding:clamp(30px,6vw,66px); border:1px solid rgba(233,224,214,.9);
+  border-radius:30px;
+  background:linear-gradient(125deg,rgba(255,255,255,.94),rgba(250,243,234,.82));
+  box-shadow:var(--shadow); animation:rise-in .7s ease both;
+}
+.hero::after {
+  content:"✦"; position:absolute; right:7%; top:10%;
+  color:rgba(168,86,69,.12); font-size:clamp(100px,18vw,230px);
+  line-height:1; transform:rotate(12deg); pointer-events:none;
+}
+.eyebrow {
+  margin:0 0 10px; color:var(--accent);
+  font:700 12px/1.4 system-ui,sans-serif; letter-spacing:.17em;
+  text-transform:uppercase;
+}
+h1 {
+  position:relative; z-index:1; max-width:720px; margin:0;
+  font-size:clamp(38px,7vw,76px); font-weight:400;
+  line-height:1.04; letter-spacing:-.045em;
+}
+.hero-dedication {
+  position:relative; z-index:1; max-width:620px; margin:18px 0 0;
+  color:var(--muted); font-size:clamp(17px,2vw,21px);
+}
+.hero-rule {
+  width:76px; height:3px; margin-top:25px; border-radius:99px;
+  background:linear-gradient(90deg,var(--accent),#d7a98b);
+}
+.panel {
+  margin:20px 0; padding:clamp(18px,3vw,28px);
+  border:1px solid var(--line); border-radius:var(--radius);
+  background:rgba(255,255,255,.84); box-shadow:var(--shadow);
+  backdrop-filter:blur(10px); animation:rise-in .65s ease both;
+}
+.stage {
+  position:relative; display:grid; width:100%;
+  height:min(68vh,690px); min-height:280px; place-items:center;
+  overflow:hidden; border:1px solid rgba(255,255,255,.12);
+  border-radius:18px; color:rgba(255,255,255,.78);
+  background:radial-gradient(ellipse at center,#302b27 0%,#191715 72%);
+  box-shadow:inset 0 0 50px rgba(0,0,0,.25);
+}
+.stage img, .stage video {
+  display:block; width:100%; height:100%;
+  object-fit:contain; object-position:center;
+  background:transparent; animation:media-in .45s ease both;
+}
+.caption {
+  position:absolute; z-index:2; right:14px; bottom:14px; left:14px;
+  padding:12px 18px; border:1px solid rgba(255,255,255,.15);
+  border-radius:12px; color:white; background:rgba(18,16,15,.72);
+  text-align:center; font-size:clamp(16px,2vw,21px);
+  backdrop-filter:blur(8px); pointer-events:none;
+}
+.stage:fullscreen {
+  width:100vw; height:100vh; min-height:0;
+  border:0; border-radius:0; background:#080807;
+}
+.stage:fullscreen img, .stage:fullscreen video {
+  width:100vw; height:100vh; object-fit:contain; background:#080807;
+}
+.stage:-webkit-full-screen {
+  width:100vw; height:100vh; min-height:0;
+  border:0; border-radius:0; background:#080807;
+}
+.stage:-webkit-full-screen img, .stage:-webkit-full-screen video {
+  width:100vw; height:100vh; object-fit:contain; background:#080807;
+}
+.controls {
+  display:flex; justify-content:center; align-items:center;
+  flex-wrap:wrap; gap:10px; margin-top:18px;
+}
+button, .file-button {
+  display:inline-flex; justify-content:center; align-items:center; gap:8px;
+  min-height:44px; padding:10px 16px; border:1px solid transparent;
+  border-radius:12px; color:white; background:var(--accent);
+  box-shadow:0 5px 13px rgba(168,86,69,.14); font-weight:700;
+  cursor:pointer; transition:transform .18s ease,box-shadow .18s ease,background .18s ease;
+}
+button:hover, .file-button:hover {
+  transform:translateY(-2px); background:var(--accent-dark);
+  box-shadow:0 8px 18px rgba(168,86,69,.2);
+}
+button:active, .file-button:active { transform:translateY(0) scale(.98); }
+button:disabled { opacity:.55; cursor:wait; transform:none; }
+button.secondary { border-color:var(--line); color:var(--ink); background:#f6f1eb; box-shadow:none; }
+button.secondary:hover { border-color:#dcc9bb; background:#eee5dc; }
+#counter { min-width:58px; color:var(--muted); font:700 13px/1 system-ui,sans-serif; text-align:center; }
+.section-heading { display:flex; align-items:flex-start; gap:14px; margin-bottom:18px; }
+.section-number {
+  display:grid; flex:0 0 38px; height:38px; place-items:center;
+  border-radius:13px; color:var(--accent); background:#f6e9e2;
+  font:700 14px/1 system-ui,sans-serif;
+}
+.section-heading h2 { margin:0; font-size:22px; font-weight:400; line-height:1.25; }
+.section-heading p { margin:5px 0 0; color:var(--muted); font-size:14px; }
+.upload-actions { display:flex; flex-wrap:wrap; gap:8px; }
+input[type=file] { display:none; }
+.file-button { margin:0; user-select:none; }
+#mediaList { margin-top:16px; }
+.item {
+  display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:9px;
+  padding:10px; border:1px solid var(--line); border-radius:14px;
+  background:rgba(255,255,255,.76); animation:rise-in .28s ease both;
+}
+.item img,.item video {
+  width:64px; height:48px; border-radius:8px; object-fit:cover; background:#211e1b;
+}
+.filename { flex:1; min-width:120px; overflow-wrap:anywhere; color:#51483f; font-size:14px; }
+.item input[type=text] { flex:1 1 160px; min-width:120px; }
+.settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px; }
+.settings label { display:block; color:#51483f; font-size:14px; font-weight:700; }
+.settings input[type=text],.settings input[type=number] {
+  width:100%; margin-top:7px;
+}
+input[type=text],input[type=number] {
+  min-height:42px; padding:9px 11px; border:1px solid var(--line);
+  border-radius:10px; color:var(--ink); background:white;
+}
+input[type=text]:focus,input[type=number]:focus {
+  border-color:#bd8577; box-shadow:0 0 0 4px rgba(168,86,69,.09); outline:none;
+}
+#musicName { display:block; margin:7px 0 9px; color:var(--muted); font-size:13px; font-weight:400; overflow-wrap:anywhere; }
+.music-picker { margin-top:7px; }
+input[type=range] { width:100%; margin:13px 0 4px; accent-color:var(--accent); cursor:pointer; }
+.export-row { display:flex; align-items:center; flex-wrap:wrap; gap:14px; margin-top:22px; }
+#status { min-height:24px; color:#647765; font-size:14px; }
+.footer-note { margin-top:25px; color:var(--muted); font-size:13px; text-align:center; }
 
-    body {
-      margin: 0;
-      padding: 20px;
-      background: #fcf8f1;
-      color: #2f2924;
-      font: 16px/1.5 Georgia, serif;
-    }
+@keyframes rise-in { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes media-in { from{opacity:0;transform:scale(.99)} to{opacity:1;transform:scale(1)} }
 
-    main { max-width: 1100px; margin: auto; }
-    header { text-align: center; padding: 15px; }
-
-    h1 {
-      font-size: clamp(32px, 6vw, 54px);
-      font-weight: 400;
-      margin: 8px;
-    }
-
-    .muted { color: #796e63; }
-
-    .panel {
-      background: #fffdfa;
-      border: 1px solid #e8ddd0;
-      border-radius: 14px;
-      padding: 18px;
-      margin: 16px 0;
-    }
-
-    .stage {
-      width: 100%;
-      height: min(72vh, 760px);
-      min-height: 300px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      border-radius: 10px;
-      background: #211e1b;
-      color: white;
-      position: relative;
-    }
-
-    .stage img,
-    .stage video {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      object-position: center;
-      background: #211e1b;
-    }
-
-    .caption {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      right: 10px;
-      z-index: 2;
-      background: #0009;
-      color: white;
-      padding: 8px;
-      text-align: center;
-      font-size: 20px;
-      border-radius: 6px;
-      pointer-events: none;
-    }
-
-    .controls,
-    .settings,
-    .item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .controls {
-      justify-content: center;
-      margin-top: 12px;
-    }
-
-    button,
-    .file-button {
-      display: inline-block;
-      border: 0;
-      border-radius: 8px;
-      padding: 10px 14px;
-      background: #a25849;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    button.secondary {
-      background: #efe6da;
-      color: #2f2924;
-    }
-
-    input[type="file"] { display: none; }
-
-    .file-button { margin: 8px 0; }
-
-    .settings { margin-top: 14px; }
-    .settings label { display: block; margin: 8px 0; }
-
-    .item {
-      padding: 8px;
-      margin-top: 8px;
-      background: white;
-      border: 1px solid #e8ddd0;
-      border-radius: 8px;
-    }
-
-    .item img,
-    .item video {
-      width: 56px;
-      height: 42px;
-      object-fit: cover;
-      border-radius: 5px;
-    }
-
-    .filename {
-      flex: 1;
-      min-width: 100px;
-    }
-
-    input[type="text"],
-    input[type="number"] {
-      padding: 8px;
-      border: 1px solid #e8ddd0;
-      border-radius: 6px;
-    }
-
-    #musicName,
-    #status {
-      display: block;
-      color: #796e63;
-      margin-top: 6px;
-    }
-
-    @media (max-width: 600px) {
-      body { padding: 10px; }
-      .panel { padding: 12px; }
-      .stage {
-        height: 65vh;
-        min-height: 240px;
-      }
-      .item input[type="text"] { width: 100%; }
-    }
-  </style>
+@media(max-width:680px) {
+  main { width:min(100% - 22px,1120px); padding-top:14px; }
+  .topline { font-size:10px; }
+  .hero { margin-top:18px; border-radius:22px; }
+  .hero::after { right:-2%; top:16%; }
+  .panel { border-radius:18px; }
+  .stage { height:58vh; min-height:240px; }
+  .settings { grid-template-columns:1fr; gap:9px; }
+  .controls button { flex:1 1 auto; }
+  .item input[type=text] { flex-basis:100%; }
+}
+@media(prefers-reduced-motion:reduce) {
+  *,*::before,*::after {
+    scroll-behavior:auto !important; animation-duration:.01ms !important;
+    animation-iteration-count:1 !important; transition-duration:.01ms !important;
+  }
+}
+</style>
 </head>
 
 <body>
 <main>
-  <header>
-    <div class="muted">A family remembrance</div>
+  <div class="topline">
+    <span class="brand-mark"><span class="brand-icon">✦</span> Family memories</span>
+    <span>A keepsake made with love</span>
+  </div>
+
+  <header class="hero">
+    <p class="eyebrow">A family remembrance</p>
     <h1 id="heading">Grandpa's Memories</h1>
-    <p class="muted" id="dedication">
-      Forever loved, always remembered
-    </p>
+    <p class="hero-dedication" id="dedication">Forever loved, always remembered</p>
+    <div class="hero-rule"></div>
   </header>
 
   <section class="panel">
-    <div class="stage" id="stage">
-      Add your family photos and videos below
-    </div>
-
+    <div class="stage" id="stage">Choose a folder or select photos and videos below.</div>
     <div class="controls">
       <button class="secondary" id="previous">← Previous</button>
       <span id="counter">0 / 0</span>
       <button class="secondary" id="next">Next →</button>
       <button id="play">▶ Play slideshow</button>
+      <button class="secondary" id="videoMute" aria-pressed="false">🔊 Mute video sound</button>
+      <button class="secondary" id="musicToggle">⏹ Stop background music</button>
+      <button class="secondary" id="fullscreen">⛶ Full screen</button>
     </div>
   </section>
 
   <section class="panel">
-    <strong>Add photos and videos</strong>
-    <p class="muted">Choose multiple files from your device.</p>
-
-    <label class="file-button">
-      ＋ Choose photos and videos
-      <input id="files" type="file" accept="image/*,video/*" multiple>
-    </label>
-
+    <div class="section-heading">
+      <span class="section-number">01</span>
+      <div><h2>Add your memories</h2><p>Choose a folder or select multiple photos and videos.</p></div>
+    </div>
+    <div class="upload-actions">
+      <label class="file-button">＋ Choose folder
+        <input id="folder" type="file" accept="image/*,video/*" multiple webkitdirectory directory>
+      </label>
+      <label class="file-button">＋ Choose photos and videos
+        <input id="files" type="file" accept="image/*,video/*" multiple>
+      </label>
+    </div>
     <div id="mediaList"></div>
   </section>
 
   <section class="panel">
-    <strong>Personalize the slideshow</strong>
-
-    <div class="settings">
-      <label>
-        Title<br>
-        <input id="titleInput" type="text" value="Grandpa's Memories">
-      </label>
-
-      <label>
-        Dedication or ceremony date<br>
-        <input id="dedicationInput" type="text"
-               value="Forever loved, always remembered">
-      </label>
-
-      <label>
-        Seconds per photo<br>
-        <input id="seconds" type="number" min="2" max="30" value="5">
-      </label>
-
-      <label>
-        Choose background music<br>
-        <input id="music" type="file" accept="audio/*">
-        <span id="musicName">No music selected</span>
-        <label class="file-button">
-          Choose music file
-          <input id="musicPicker" type="file" accept="audio/*">
-        </label>
-      </label>
-
-      <label>
-        Music volume<br>
-        <input id="volume" type="range" min="0" max="30" value="12">
-      </label>
+    <div class="section-heading">
+      <span class="section-number">02</span>
+      <div><h2>Personalize the slideshow</h2><p>Add a title, dedication, timing, and background music.</p></div>
     </div>
 
-    <button id="export">⬇ Export slideshow video</button>
-    <div id="status"></div>
+    <div class="settings">
+      <label>Title<input id="titleInput" type="text" value="Grandpa's Memories"></label>
+      <label>Dedication or ceremony date<input id="dedicationInput" type="text" value="Forever loved, always remembered"></label>
+      <label>Seconds per photo<input id="seconds" type="number" min="2" max="30" value="5"></label>
+      <label>Background music
+        <span id="musicName">No music selected</span>
+        <span class="file-button music-picker">Choose music file<input id="music" type="file" accept="audio/*"></span>
+      </label>
+      <label>Music volume<input id="volume" type="range" min="0" max="100" value="35"></label>
+    </div>
+
+    <div class="export-row">
+      <button id="export">⬇ Export slideshow video</button>
+      <div id="status" role="status" aria-live="polite"></div>
+    </div>
   </section>
+
+  <p class="footer-note">Made with love, for the memories that stay with us.</p>
 </main>
 
 <audio id="audio" loop></audio>
@@ -240,52 +274,45 @@
 <script>
 const $ = id => document.getElementById(id);
 const items = [];
-
-let current = 0;
-let timer = null;
-let playing = false;
-let musicUrl = null;
-
-const stage = $("stage");
+let current = 0, timer = null, playing = false;
+let videoMuted = false, musicStopped = false, musicUrl = null, runId = 0;
 const audio = $("audio");
+const stage = $("stage");
 
 function updateHeader() {
-  $("heading").textContent =
-    $("titleInput").value || "Grandpa's Memories";
+  $("heading").textContent = $("titleInput").value || "Grandpa's Memories";
+  $("dedication").textContent = $("dedicationInput").value || "";
+}
 
-  $("dedication").textContent =
-    $("dedicationInput").value || "";
+function applyVideoMute(video) {
+  if (video?.tagName === "VIDEO") video.muted = videoMuted;
 }
 
 function render() {
   updateHeader();
-  $("mediaList").innerHTML = "";
+  $("mediaList").replaceChildren();
 
   if (!items.length) {
-    stage.textContent = "Add your family photos and videos below";
+    stage.textContent = "Choose a folder or select photos and videos below.";
     $("counter").textContent = "0 / 0";
     return;
   }
 
   current = Math.max(0, Math.min(current, items.length - 1));
   const item = items[current];
+  stage.replaceChildren();
 
-  stage.innerHTML = "";
-
-  const media = document.createElement(
-    item.type === "video" ? "video" : "img"
-  );
-
-  media.src = item.url;
+  const media = document.createElement(item.type === "video" ? "video" : "img");
   media.id = "currentMedia";
+  media.src = item.url;
 
   if (item.type === "video") {
     media.controls = true;
     media.playsInline = true;
+    applyVideoMute(media);
   } else {
     media.alt = item.file.name;
   }
-
   stage.appendChild(media);
 
   if (item.caption) {
@@ -301,61 +328,46 @@ function render() {
     const row = document.createElement("div");
     row.className = "item";
 
-    const thumbnail = document.createElement(
-      entry.type === "video" ? "video" : "img"
-    );
-    thumbnail.src = entry.url;
-    thumbnail.muted = true;
+    const thumb = document.createElement(entry.type === "video" ? "video" : "img");
+    thumb.src = entry.url;
+    thumb.muted = true;
 
     const name = document.createElement("span");
     name.className = "filename";
-    name.textContent =
-      `${entry.type === "video" ? "▶ " : "▧ "}${entry.file.name}`;
+    name.textContent = `${entry.type === "video" ? "▶ " : "▧ "}${entry.file.name}`;
 
     const captionInput = document.createElement("input");
     captionInput.type = "text";
     captionInput.placeholder = "Optional caption";
     captionInput.value = entry.caption;
-
     captionInput.addEventListener("input", () => {
       entry.caption = captionInput.value;
-
-      if (index === current) {
-        const oldCaption = stage.querySelector(".caption");
-
-        if (entry.caption) {
-          if (oldCaption) {
-            oldCaption.textContent = entry.caption;
-          } else {
-            const caption = document.createElement("div");
-            caption.className = "caption";
-            caption.textContent = entry.caption;
-            stage.appendChild(caption);
-          }
-        } else if (oldCaption) {
-          oldCaption.remove();
+      if (index !== current) return;
+      let caption = stage.querySelector(".caption");
+      if (entry.caption) {
+        if (!caption) {
+          caption = document.createElement("div");
+          caption.className = "caption";
+          stage.appendChild(caption);
         }
-      }
+        caption.textContent = entry.caption;
+      } else if (caption) caption.remove();
     });
 
     const up = makeButton("↑", () => move(index, -1));
     const down = makeButton("↓", () => move(index, 1));
-    const removeButton = makeButton("Remove", () => removeItem(index));
+    const remove = makeButton("Remove", () => removeItem(index));
+    [up, down, remove].forEach(button => button.className = "secondary");
 
-    up.className = down.className = removeButton.className = "secondary";
-
-    row.append(thumbnail, name, captionInput, up, down, removeButton);
-
+    row.append(thumb, name, captionInput, up, down, remove);
     row.addEventListener("click", event => {
-      if (
-        !event.target.closest("button") &&
-        event.target !== captionInput
-      ) {
+      if (!event.target.closest("button") && event.target !== captionInput) {
+        stopCurrentVideo();
         current = index;
         render();
+        if (playing) playCurrent();
       }
     });
-
     $("mediaList").appendChild(row);
   });
 }
@@ -367,159 +379,185 @@ function makeButton(text, action) {
   return button;
 }
 
+function stopCurrentVideo() {
+  const video = $("currentMedia");
+  if (video?.tagName === "VIDEO") {
+    video.onended = null;
+    video.pause();
+  }
+}
+
 function move(index, direction) {
   const target = index + direction;
-
   if (target < 0 || target >= items.length) return;
-
+  stopCurrentVideo();
   [items[index], items[target]] = [items[target], items[index]];
   current = target;
   render();
+  if (playing) playCurrent();
 }
 
 function removeItem(index) {
+  stopCurrentVideo();
   URL.revokeObjectURL(items[index].url);
   items.splice(index, 1);
   current = Math.min(current, Math.max(0, items.length - 1));
   render();
+  if (playing && items.length) playCurrent();
+}
+
+function addFiles(fileList) {
+  for (const file of fileList) {
+    if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
+    items.push({
+      file, url: URL.createObjectURL(file),
+      type: file.type.startsWith("video/") ? "video" : "image",
+      caption: ""
+    });
+  }
+  render();
 }
 
 $("files").addEventListener("change", event => {
-  for (const file of event.target.files) {
-    if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-      items.push({
-        file,
-        url: URL.createObjectURL(file),
-        type: file.type.startsWith("video/") ? "video" : "image",
-        caption: ""
-      });
-    }
-  }
-
+  addFiles(event.target.files);
   event.target.value = "";
-  render();
 });
-
+$("folder").addEventListener("change", event => {
+  addFiles(event.target.files);
+  event.target.value = "";
+});
 $("titleInput").addEventListener("input", updateHeader);
 $("dedicationInput").addEventListener("input", updateHeader);
 
 function show(index) {
   if (!items.length) return;
-
+  stopCurrentVideo();
   current = (index + items.length) % items.length;
   render();
 }
+$("previous").onclick = () => { show(current - 1); if (playing) playCurrent(); };
+$("next").onclick = () => { show(current + 1); if (playing) playCurrent(); };
 
-$("previous").onclick = () => show(current - 1);
-$("next").onclick = () => show(current + 1);
-
-function stopSlideshow() {
-  playing = false;
+function playCurrent() {
   clearTimeout(timer);
-  $("play").textContent = "▶ Play slideshow";
-  audio.pause();
-}
-
-function advanceSlideshow() {
-  if (!playing) return;
-
+  if (!playing || !items.length) return;
+  const thisRun = ++runId;
   const item = items[current];
 
-  if (item?.type === "video") {
+  if (item.type === "video") {
     const video = $("currentMedia");
-    video.onended = () => show(current + 1);
-    video.play().catch(() => {});
-    return;
+    applyVideoMute(video);
+    video.onended = () => {
+      if (!playing || thisRun !== runId) return;
+      show(current + 1);
+      playCurrent();
+    };
+    video.play().catch(error => {
+      console.warn("Video could not play:", error);
+      timer = setTimeout(() => {
+        if (!playing || thisRun !== runId) return;
+        show(current + 1);
+        playCurrent();
+      }, 3000);
+    });
+  } else {
+    const seconds = Math.max(2, Number($("seconds").value) || 5);
+    timer = setTimeout(() => {
+      if (!playing || thisRun !== runId) return;
+      show(current + 1);
+      playCurrent();
+    }, seconds * 1000);
   }
-
-  const seconds = Math.max(2, Number($("seconds").value) || 5);
-
-  timer = setTimeout(() => {
-    show(current + 1);
-  }, seconds * 1000);
 }
 
 $("play").onclick = () => {
   if (!items.length) return;
-
   if (playing) {
-    stopSlideshow();
+    playing = false;
+    runId++;
+    clearTimeout(timer);
+    stopCurrentVideo();
+    $("play").textContent = "▶ Play slideshow";
     return;
   }
-
   playing = true;
   $("play").textContent = "❚❚ Pause slideshow";
-
-  if (audio.src) {
-    audio.play().catch(() => {});
-  }
-
-  advanceSlideshow();
+  if (audio.src && !musicStopped) audio.play().catch(() => {});
+  playCurrent();
 };
 
-const stageObserver = new MutationObserver(() => {
-  if (playing) {
-    clearTimeout(timer);
-    advanceSlideshow();
-  }
-});
-stageObserver.observe(stage, { childList: true });
+$("videoMute").onclick = () => {
+  videoMuted = !videoMuted;
+  applyVideoMute($("currentMedia"));
+  $("videoMute").textContent = videoMuted ? "🔇 Unmute video sound" : "🔊 Mute video sound";
+  $("videoMute").setAttribute("aria-pressed", String(videoMuted));
+};
 
-function setMusicFile(file) {
+$("music").addEventListener("change", event => {
+  const file = event.target.files[0];
   if (!file) return;
-
   if (musicUrl) URL.revokeObjectURL(musicUrl);
-
   musicUrl = URL.createObjectURL(file);
   audio.src = musicUrl;
   audio.volume = Number($("volume").value) / 100;
   $("musicName").textContent = `Selected: ${file.name}`;
-}
-
-$("music").addEventListener("change", event => {
-  setMusicFile(event.target.files[0]);
+  musicStopped = false;
+  updateMusicButton();
+  if (playing) audio.play().catch(() => {});
+  event.target.value = "";
 });
-
-$("musicPicker").addEventListener("change", event => {
-  setMusicFile(event.target.files[0]);
-});
-
 $("volume").addEventListener("input", event => {
   audio.volume = Number(event.target.value) / 100;
 });
 
-function drawFitted(context, media, width, height) {
-  const mediaWidth = media.videoWidth || media.naturalWidth;
-  const mediaHeight = media.videoHeight || media.naturalHeight;
-
-  if (!mediaWidth || !mediaHeight) return;
-
-  const scale = Math.min(
-    width / mediaWidth,
-    height / mediaHeight
-  );
-
-  const drawWidth = mediaWidth * scale;
-  const drawHeight = mediaHeight * scale;
-
-  context.drawImage(
-    media,
-    (width - drawWidth) / 2,
-    (height - drawHeight) / 2,
-    drawWidth,
-    drawHeight
-  );
+function updateMusicButton() {
+  $("musicToggle").textContent = musicStopped ? "▶ Play background music" : "⏹ Stop background music";
 }
+$("musicToggle").onclick = () => {
+  if (!audio.src) {
+    $("status").textContent = "Choose a music file first.";
+    return;
+  }
+  musicStopped = !musicStopped;
+  if (musicStopped) audio.pause();
+  else audio.play().catch(() => {
+    $("status").textContent = "Press Play background music again to start the song.";
+  });
+  updateMusicButton();
+};
 
-function drawCaption(context, text, width, height) {
+$("fullscreen").onclick = async () => {
+  try {
+    if (!document.fullscreenElement) {
+      if (stage.requestFullscreen) await stage.requestFullscreen();
+      else if (stage.webkitRequestFullscreen) stage.webkitRequestFullscreen();
+    } else if (document.exitFullscreen) {
+      await document.exitFullscreen();
+    }
+  } catch (error) {
+    $("status").textContent = "Full screen is not available in this browser.";
+  }
+};
+document.addEventListener("fullscreenchange", () => {
+  $("fullscreen").textContent = document.fullscreenElement ? "⤢ Exit full screen" : "⛶ Full screen";
+});
+
+function drawFitted(ctx, media, width, height) {
+  const mw = media.videoWidth || media.naturalWidth;
+  const mh = media.videoHeight || media.naturalHeight;
+  if (!mw || !mh) return;
+  const scale = Math.min(width / mw, height / mh);
+  const dw = mw * scale, dh = mh * scale;
+  ctx.drawImage(media, (width - dw) / 2, (height - dh) / 2, dw, dh);
+}
+function drawCaption(ctx, text, width, height) {
   if (!text) return;
-
-  context.fillStyle = "#0009";
-  context.fillRect(0, height - 78, width, 78);
-  context.fillStyle = "white";
-  context.font = "30px Georgia";
-  context.textAlign = "center";
-  context.fillText(text, width / 2, height - 28, width - 50);
+  ctx.fillStyle = "#0009";
+  ctx.fillRect(0, height - 78, width, 78);
+  ctx.fillStyle = "white";
+  ctx.font = "30px Georgia";
+  ctx.textAlign = "center";
+  ctx.fillText(text, width / 2, height - 28, width - 50);
 }
 
 async function exportVideo() {
@@ -527,169 +565,116 @@ async function exportVideo() {
     $("status").textContent = "Add photos or videos first.";
     return;
   }
-
-  if (
-    !window.MediaRecorder ||
-    !HTMLCanvasElement.prototype.captureStream
-  ) {
-    $("status").textContent =
-      "Use a recent Chrome or Edge browser for video export.";
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
+    $("status").textContent = "Use a recent Chrome or Edge browser for video export.";
     return;
   }
 
-  stopSlideshow();
+  playing = false;
+  runId++;
+  clearTimeout(timer);
+  stopCurrentVideo();
+  $("play").textContent = "▶ Play slideshow";
 
-  const exportButton = $("export");
-  exportButton.disabled = true;
+  const button = $("export");
+  button.disabled = true;
   $("status").textContent = "Preparing video. Keep this page open.";
 
   const canvas = document.createElement("canvas");
   canvas.width = 1920;
   canvas.height = 1080;
-
-  const context = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d");
   const stream = canvas.captureStream(30);
-
-  let audioContext = null;
-  let recorder = null;
+  let audioContext = null, recorder = null;
 
   try {
-    if (audio.src) {
+    if (audio.src && !musicStopped) {
       audioContext = new AudioContext();
-
       const source = audioContext.createMediaElementSource(audio);
       const gain = audioContext.createGain();
       const destination = audioContext.createMediaStreamDestination();
-
       gain.gain.value = Number($("volume").value) / 100;
       source.connect(gain);
       gain.connect(audioContext.destination);
       gain.connect(destination);
-
-      destination.stream.getAudioTracks().forEach(track => {
-        stream.addTrack(track);
-      });
-
+      destination.stream.getAudioTracks().forEach(track => stream.addTrack(track));
       audio.currentTime = 0;
       await audioContext.resume();
       await audio.play();
     }
 
-    const mimeType = MediaRecorder.isTypeSupported(
-      "video/webm;codecs=vp9,opus"
-    )
-      ? "video/webm;codecs=vp9,opus"
-      : "video/webm";
-
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+      ? "video/webm;codecs=vp9,opus" : "video/webm";
     recorder = new MediaRecorder(stream, { mimeType });
     const chunks = [];
-
-    recorder.ondataavailable = event => {
-      if (event.data.size) chunks.push(event.data);
-    };
-
-    const finished = new Promise(resolve => {
-      recorder.onstop = resolve;
-    });
-
+    recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+    const finished = new Promise(resolve => { recorder.onstop = resolve; });
     recorder.start();
 
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
-
-      $("status").textContent =
-        `Recording memory ${index + 1} of ${items.length}…`;
+      $("status").textContent = `Recording item ${index + 1} of ${items.length}…`;
 
       if (item.type === "image") {
         const image = new Image();
         image.src = item.url;
         await image.decode();
-
-        context.fillStyle = "#211e1b";
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        drawFitted(context, image, canvas.width, canvas.height);
-        drawCaption(context, item.caption, canvas.width, canvas.height);
-
-        const seconds = Math.max(
-          2,
-          Number($("seconds").value) || 5
-        );
-
-        await new Promise(resolve => {
-          setTimeout(resolve, seconds * 1000);
-        });
+        ctx.fillStyle = "#211e1b";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        drawFitted(ctx, image, canvas.width, canvas.height);
+        drawCaption(ctx, item.caption, canvas.width, canvas.height);
+        await new Promise(resolve => setTimeout(resolve, Math.max(2, Number($("seconds").value) || 5) * 1000));
       } else {
         const video = document.createElement("video");
         video.src = item.url;
         video.muted = true;
         video.playsInline = true;
-
         await new Promise((resolve, reject) => {
           video.onloadedmetadata = resolve;
           video.onerror = reject;
         });
-
         await video.play();
-
         await new Promise(resolve => {
           function drawFrame() {
-            context.fillStyle = "#211e1b";
-            context.fillRect(0, 0, canvas.width, canvas.height);
-            drawFitted(context, video, canvas.width, canvas.height);
-            drawCaption(context, item.caption, canvas.width, canvas.height);
-
-            if (video.ended) {
-              resolve();
-            } else {
-              requestAnimationFrame(drawFrame);
-            }
+            ctx.fillStyle = "#211e1b";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawFitted(ctx, video, canvas.width, canvas.height);
+            drawCaption(ctx, item.caption, canvas.width, canvas.height);
+            if (video.ended) resolve();
+            else requestAnimationFrame(drawFrame);
           }
-
           drawFrame();
         });
-
+        video.pause();
         video.remove();
       }
     }
 
     recorder.stop();
     await finished;
-
     const blob = new Blob(chunks, { type: mimeType });
-    const downloadUrl = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-
-    link.href = downloadUrl;
+    link.href = url;
     link.download = "grandpa-memories.webm";
     link.click();
-
-    setTimeout(() => URL.revokeObjectURL(downloadUrl), 60000);
-
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
     $("status").textContent = "Finished. Your video has downloaded.";
   } catch (error) {
     console.error(error);
-
-    if (recorder?.state === "recording") {
-      recorder.stop();
-    }
-
-    $("status").textContent =
-      "Export failed. Try a smaller file or another browser.";
+    if (recorder?.state === "recording") recorder.stop();
+    $("status").textContent = "Export failed. Try smaller video files or the latest Chrome/Edge.";
   } finally {
-    exportButton.disabled = false;
+    button.disabled = false;
     audio.pause();
-
-    if (audioContext) {
-      await audioContext.close().catch(() => {});
-    }
-
+    if (audioContext) await audioContext.close().catch(() => {});
     stream.getTracks().forEach(track => track.stop());
   }
 }
 
 $("export").onclick = exportVideo;
-
 render();
+updateMusicButton();
 </script>
 </body>
 </html>
