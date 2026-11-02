@@ -199,14 +199,9 @@ input[type=range] { width:100%; margin:13px 0 4px; accent-color:var(--accent); c
 }
 </style>
 </head>
-
 <body>
 <main>
-  <div class="topline">
-    <span class="brand-mark"><span class="brand-icon">✦</span> Family memories</span>
-    <span>A keepsake made with love</span>
-  </div>
-
+  <div class="topline"><span class="brand-mark"><span class="brand-icon">✦</span> Family memories</span><span>A keepsake made with love</span></div>
   <header class="hero">
     <p class="eyebrow">A family remembrance</p>
     <h1 id="heading">Grandpa's Memories</h1>
@@ -214,8 +209,15 @@ input[type=range] { width:100%; margin:13px 0 4px; accent-color:var(--accent); c
     <div class="hero-rule"></div>
   </header>
 
-  <section class="panel">
+  <section id="videoPage" class="panel view-page">
     <div class="stage" id="stage">Choose a folder or select photos and videos below.</div>
+  </section>
+  <section id="controlsEntry" class="panel view-page">
+    <div class="section-heading"><span class="section-number">⚙</span><div><h2>Slideshow controls</h2><p>Open the separate page for next, previous, sound, and playback buttons.</p></div></div>
+    <div class="controls"><button id="openControls">⚙ Open slideshow controls</button></div>
+  </section>
+  <section id="controlsPage" class="panel view-page" hidden>
+    <div class="section-heading"><span class="section-number">▶</span><div><h2>Slideshow controls</h2><p>Choose a photo or video, or adjust the sound and playback.</p></div></div>
     <div class="controls">
       <button class="secondary" id="previous">← Previous</button>
       <span id="counter">0 / 0</span>
@@ -225,30 +227,20 @@ input[type=range] { width:100%; margin:13px 0 4px; accent-color:var(--accent); c
       <button class="secondary" id="musicToggle">⏹ Stop background music</button>
       <button class="secondary" id="fullscreen">⛶ Full screen</button>
     </div>
+    <div class="controls"><button class="secondary" id="returnVideo">← Back to video</button></div>
   </section>
 
   <section class="panel">
-    <div class="section-heading">
-      <span class="section-number">01</span>
-      <div><h2>Add your memories</h2><p>Choose a folder or select multiple photos and videos.</p></div>
-    </div>
+    <div class="section-heading"><span class="section-number">01</span><div><h2>Add your memories</h2><p>Choose a folder or select multiple photos and videos.</p></div></div>
     <div class="upload-actions">
-      <label class="file-button">＋ Choose folder
-        <input id="folder" type="file" accept="image/*,video/*" multiple webkitdirectory directory>
-      </label>
-      <label class="file-button">＋ Choose photos and videos
-        <input id="files" type="file" accept="image/*,video/*" multiple>
-      </label>
+      <label class="file-button">＋ Choose folder<input id="folder" type="file" accept="image/*,video/*" multiple webkitdirectory directory></label>
+      <label class="file-button">＋ Choose photos and videos<input id="files" type="file" accept="image/*,video/*" multiple></label>
     </div>
     <div id="mediaList"></div>
   </section>
 
   <section class="panel">
-    <div class="section-heading">
-      <span class="section-number">02</span>
-      <div><h2>Personalize the slideshow</h2><p>Add a title, dedication, timing, and background music.</p></div>
-    </div>
-
+    <div class="section-heading"><span class="section-number">02</span><div><h2>Personalize the slideshow</h2><p>Add a title, dedication, timing, and background music.</p></div></div>
     <div class="settings">
       <label>Title<input id="titleInput" type="text" value="Grandpa's Memories"></label>
       <label>Dedication or ceremony date<input id="dedicationInput" type="text" value="Forever loved, always remembered"></label>
@@ -259,16 +251,10 @@ input[type=range] { width:100%; margin:13px 0 4px; accent-color:var(--accent); c
       </label>
       <label>Music volume<input id="volume" type="range" min="0" max="100" value="35"></label>
     </div>
-
-    <div class="export-row">
-      <button id="export">⬇ Export slideshow video</button>
-      <div id="status" role="status" aria-live="polite"></div>
-    </div>
+    <div class="export-row"><button id="export">⬇ Export slideshow video</button><div id="status" role="status" aria-live="polite"></div></div>
   </section>
-
   <p class="footer-note">Made with love, for the memories that stay with us.</p>
 </main>
-
 <audio id="audio" loop></audio>
 
 <script>
@@ -279,11 +265,20 @@ let videoMuted = false, musicStopped = false, musicUrl = null, runId = 0;
 const audio = $("audio");
 const stage = $("stage");
 
+function showScreen(screen) {
+  const showVideo = screen === "video";
+  $("videoPage").hidden = !showVideo;
+  $("controlsEntry").hidden = !showVideo;
+  $("controlsPage").hidden = showVideo;
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+$("openControls").onclick = () => showScreen("controls");
+$("returnVideo").onclick = () => showScreen("video");
+
 function updateHeader() {
   $("heading").textContent = $("titleInput").value || "Grandpa's Memories";
   $("dedication").textContent = $("dedicationInput").value || "";
 }
-
 function applyVideoMute(video) {
   if (video?.tagName === "VIDEO") video.muted = videoMuted;
 }
@@ -291,19 +286,24 @@ function applyVideoMute(video) {
 function render() {
   updateHeader();
   $("mediaList").replaceChildren();
-
   if (!items.length) {
     stage.textContent = "Choose a folder or select photos and videos below.";
     $("counter").textContent = "0 / 0";
     return;
   }
 
-  current = Math.max(0, Math.min(current, items.length - 1));
+  current = Math.max(0,Math.min(current,items.length-1));
   const item = items[current];
   stage.replaceChildren();
+  stage.style.setProperty("--media-ratio","1.7778");
 
   const media = document.createElement(item.type === "video" ? "video" : "img");
   media.id = "currentMedia";
+  media.addEventListener(item.type === "video" ? "loadedmetadata" : "load",() => {
+    const width = item.type === "video" ? media.videoWidth : media.naturalWidth;
+    const height = item.type === "video" ? media.videoHeight : media.naturalHeight;
+    if (width && height) stage.style.setProperty("--media-ratio",String(width/height));
+  },{once:true});
   media.src = item.url;
 
   if (item.type === "video") {
@@ -315,32 +315,34 @@ function render() {
   }
   stage.appendChild(media);
 
+  const frameOverlay = document.createElement("img");
+  frameOverlay.className = "frame-overlay";
+  frameOverlay.alt = "";
+  frameOverlay.src = "blue-floral-frame.png";
+  stage.appendChild(frameOverlay);
+
   if (item.caption) {
     const caption = document.createElement("div");
     caption.className = "caption";
     caption.textContent = item.caption;
     stage.appendChild(caption);
   }
+  $("counter").textContent = `${current+1} / ${items.length}`;
 
-  $("counter").textContent = `${current + 1} / ${items.length}`;
-
-  items.forEach((entry, index) => {
+  items.forEach((entry,index) => {
     const row = document.createElement("div");
     row.className = "item";
-
     const thumb = document.createElement(entry.type === "video" ? "video" : "img");
     thumb.src = entry.url;
     thumb.muted = true;
-
     const name = document.createElement("span");
     name.className = "filename";
     name.textContent = `${entry.type === "video" ? "▶ " : "▧ "}${entry.file.name}`;
-
     const captionInput = document.createElement("input");
     captionInput.type = "text";
     captionInput.placeholder = "Optional caption";
     captionInput.value = entry.caption;
-    captionInput.addEventListener("input", () => {
+    captionInput.addEventListener("input",() => {
       entry.caption = captionInput.value;
       if (index !== current) return;
       let caption = stage.querySelector(".caption");
@@ -353,14 +355,12 @@ function render() {
         caption.textContent = entry.caption;
       } else if (caption) caption.remove();
     });
-
-    const up = makeButton("↑", () => move(index, -1));
-    const down = makeButton("↓", () => move(index, 1));
-    const remove = makeButton("Remove", () => removeItem(index));
-    [up, down, remove].forEach(button => button.className = "secondary");
-
-    row.append(thumb, name, captionInput, up, down, remove);
-    row.addEventListener("click", event => {
+    const up = makeButton("↑",() => move(index,-1));
+    const down = makeButton("↓",() => move(index,1));
+    const remove = makeButton("Remove",() => removeItem(index));
+    [up,down,remove].forEach(button => button.className = "secondary");
+    row.append(thumb,name,captionInput,up,down,remove);
+    row.addEventListener("click",event => {
       if (!event.target.closest("button") && event.target !== captionInput) {
         stopCurrentVideo();
         current = index;
@@ -372,13 +372,12 @@ function render() {
   });
 }
 
-function makeButton(text, action) {
+function makeButton(text,action) {
   const button = document.createElement("button");
   button.textContent = text;
   button.onclick = action;
   return button;
 }
-
 function stopCurrentVideo() {
   const video = $("currentMedia");
   if (video?.tagName === "VIDEO") {
@@ -386,261 +385,245 @@ function stopCurrentVideo() {
     video.pause();
   }
 }
-
-function move(index, direction) {
-  const target = index + direction;
-  if (target < 0 || target >= items.length) return;
+function move(index,direction) {
+  const target = index+direction;
+  if (target<0 || target>=items.length) return;
   stopCurrentVideo();
-  [items[index], items[target]] = [items[target], items[index]];
-  current = target;
+  [items[index],items[target]]=[items[target],items[index]];
+  current=target;
   render();
   if (playing) playCurrent();
 }
-
 function removeItem(index) {
   stopCurrentVideo();
   URL.revokeObjectURL(items[index].url);
-  items.splice(index, 1);
-  current = Math.min(current, Math.max(0, items.length - 1));
+  items.splice(index,1);
+  current=Math.min(current,Math.max(0,items.length-1));
   render();
   if (playing && items.length) playCurrent();
 }
-
 function addFiles(fileList) {
   for (const file of fileList) {
     if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
     items.push({
-      file, url: URL.createObjectURL(file),
-      type: file.type.startsWith("video/") ? "video" : "image",
-      caption: ""
+      file,url:URL.createObjectURL(file),
+      type:file.type.startsWith("video/")?"video":"image",
+      caption:""
     });
   }
   render();
 }
-
-$("files").addEventListener("change", event => {
+$("files").addEventListener("change",event => {
   addFiles(event.target.files);
-  event.target.value = "";
+  event.target.value="";
 });
-$("folder").addEventListener("change", event => {
+$("folder").addEventListener("change",event => {
   addFiles(event.target.files);
-  event.target.value = "";
+  event.target.value="";
 });
-$("titleInput").addEventListener("input", updateHeader);
-$("dedicationInput").addEventListener("input", updateHeader);
+$("titleInput").addEventListener("input",updateHeader);
+$("dedicationInput").addEventListener("input",updateHeader);
 
 function show(index) {
   if (!items.length) return;
   stopCurrentVideo();
-  current = (index + items.length) % items.length;
+  current=(index+items.length)%items.length;
   render();
 }
-$("previous").onclick = () => { show(current - 1); if (playing) playCurrent(); };
-$("next").onclick = () => { show(current + 1); if (playing) playCurrent(); };
+$("previous").onclick=()=>{show(current-1);showScreen("video");if(playing)playCurrent()};
+$("next").onclick=()=>{show(current+1);showScreen("video");if(playing)playCurrent()};
 
 function playCurrent() {
   clearTimeout(timer);
   if (!playing || !items.length) return;
-  const thisRun = ++runId;
-  const item = items[current];
-
-  if (item.type === "video") {
-    const video = $("currentMedia");
+  const thisRun=++runId;
+  const item=items[current];
+  if (item.type==="video") {
+    const video=$("currentMedia");
     applyVideoMute(video);
-    video.onended = () => {
-      if (!playing || thisRun !== runId) return;
-      show(current + 1);
+    video.onended=()=>{
+      if(!playing||thisRun!==runId)return;
+      show(current+1);
       playCurrent();
     };
-    video.play().catch(error => {
-      console.warn("Video could not play:", error);
-      timer = setTimeout(() => {
-        if (!playing || thisRun !== runId) return;
-        show(current + 1);
+    video.play().catch(error=>{
+      console.warn("Video could not play:",error);
+      timer=setTimeout(()=>{
+        if(!playing||thisRun!==runId)return;
+        show(current+1);
         playCurrent();
-      }, 3000);
+      },3000);
     });
   } else {
-    const seconds = Math.max(2, Number($("seconds").value) || 5);
-    timer = setTimeout(() => {
-      if (!playing || thisRun !== runId) return;
-      show(current + 1);
+    const seconds=Math.max(2,Number($("seconds").value)||5);
+    timer=setTimeout(()=>{
+      if(!playing||thisRun!==runId)return;
+      show(current+1);
       playCurrent();
-    }, seconds * 1000);
+    },seconds*1000);
   }
 }
-
-$("play").onclick = () => {
-  if (!items.length) return;
-  if (playing) {
-    playing = false;
+$("play").onclick=()=>{
+  if(!items.length)return;
+  if(playing){
+    playing=false;
     runId++;
     clearTimeout(timer);
     stopCurrentVideo();
-    $("play").textContent = "▶ Play slideshow";
+    $("play").textContent="▶ Play slideshow";
     return;
   }
-  playing = true;
-  $("play").textContent = "❚❚ Pause slideshow";
-  if (audio.src && !musicStopped) audio.play().catch(() => {});
+  playing=true;
+  $("play").textContent="❚❚ Pause slideshow";
+  if(audio.src&&!musicStopped)audio.play().catch(()=>{});
   playCurrent();
 };
-
-$("videoMute").onclick = () => {
-  videoMuted = !videoMuted;
+$("videoMute").onclick=()=>{
+  videoMuted=!videoMuted;
   applyVideoMute($("currentMedia"));
-  $("videoMute").textContent = videoMuted ? "🔇 Unmute video sound" : "🔊 Mute video sound";
-  $("videoMute").setAttribute("aria-pressed", String(videoMuted));
+  $("videoMute").textContent=videoMuted?"🔇 Unmute video sound":"🔊 Mute video sound";
+  $("videoMute").setAttribute("aria-pressed",String(videoMuted));
 };
-
-$("music").addEventListener("change", event => {
-  const file = event.target.files[0];
-  if (!file) return;
-  if (musicUrl) URL.revokeObjectURL(musicUrl);
-  musicUrl = URL.createObjectURL(file);
-  audio.src = musicUrl;
-  audio.volume = Number($("volume").value) / 100;
-  $("musicName").textContent = `Selected: ${file.name}`;
-  musicStopped = false;
+$("music").addEventListener("change",event=>{
+  const file=event.target.files[0];
+  if(!file)return;
+  if(musicUrl)URL.revokeObjectURL(musicUrl);
+  musicUrl=URL.createObjectURL(file);
+  audio.src=musicUrl;
+  audio.volume=Number($("volume").value)/100;
+  $("musicName").textContent=`Selected: ${file.name}`;
+  musicStopped=false;
   updateMusicButton();
-  if (playing) audio.play().catch(() => {});
-  event.target.value = "";
+  if(playing)audio.play().catch(()=>{});
+  event.target.value="";
 });
-$("volume").addEventListener("input", event => {
-  audio.volume = Number(event.target.value) / 100;
+$("volume").addEventListener("input",event=>{
+  audio.volume=Number(event.target.value)/100;
 });
-
 function updateMusicButton() {
-  $("musicToggle").textContent = musicStopped ? "▶ Play background music" : "⏹ Stop background music";
+  $("musicToggle").textContent=musicStopped?"▶ Play background music":"⏹ Stop background music";
 }
-$("musicToggle").onclick = () => {
-  if (!audio.src) {
-    $("status").textContent = "Choose a music file first.";
+$("musicToggle").onclick=()=>{
+  if(!audio.src){
+    $("status").textContent="Choose a music file first.";
     return;
   }
-  musicStopped = !musicStopped;
-  if (musicStopped) audio.pause();
-  else audio.play().catch(() => {
-    $("status").textContent = "Press Play background music again to start the song.";
+  musicStopped=!musicStopped;
+  if(musicStopped)audio.pause();
+  else audio.play().catch(()=>{
+    $("status").textContent="Press Play background music again to start the song.";
   });
   updateMusicButton();
 };
-
-$("fullscreen").onclick = async () => {
-  try {
-    if (!document.fullscreenElement) {
-      if (stage.requestFullscreen) await stage.requestFullscreen();
-      else if (stage.webkitRequestFullscreen) stage.webkitRequestFullscreen();
-    } else if (document.exitFullscreen) {
+$("fullscreen").onclick=async()=>{
+  showScreen("video");
+  try{
+    if(!document.fullscreenElement){
+      if(stage.requestFullscreen)await stage.requestFullscreen();
+      else if(stage.webkitRequestFullscreen)stage.webkitRequestFullscreen();
+    }else if(document.exitFullscreen){
       await document.exitFullscreen();
     }
-  } catch (error) {
-    $("status").textContent = "Full screen is not available in this browser.";
+  }catch(error){
+    $("status").textContent="Full screen is not available in this browser.";
   }
 };
-document.addEventListener("fullscreenchange", () => {
-  $("fullscreen").textContent = document.fullscreenElement ? "⤢ Exit full screen" : "⛶ Full screen";
+document.addEventListener("fullscreenchange",()=>{
+  $("fullscreen").textContent=document.fullscreenElement?"⤢ Exit full screen":"⛶ Full screen";
 });
 
-function drawFitted(ctx, media, width, height) {
-  const mw = media.videoWidth || media.naturalWidth;
-  const mh = media.videoHeight || media.naturalHeight;
-  if (!mw || !mh) return;
-  const scale = Math.min(width / mw, height / mh);
-  const dw = mw * scale, dh = mh * scale;
-  ctx.drawImage(media, (width - dw) / 2, (height - dh) / 2, dw, dh);
+function drawFitted(ctx,media,width,height) {
+  const mw=media.videoWidth||media.naturalWidth;
+  const mh=media.videoHeight||media.naturalHeight;
+  if(!mw||!mh)return;
+  const scale=Math.min(width/mw,height/mh);
+  const dw=mw*scale,dh=mh*scale;
+  ctx.drawImage(media,(width-dw)/2,(height-dh)/2,dw,dh);
 }
-function drawCaption(ctx, text, width, height) {
-  if (!text) return;
-  ctx.fillStyle = "#0009";
-  ctx.fillRect(0, height - 78, width, 78);
-  ctx.fillStyle = "white";
-  ctx.font = "30px Georgia";
-  ctx.textAlign = "center";
-  ctx.fillText(text, width / 2, height - 28, width - 50);
+function drawCaption(ctx,text,width,height) {
+  if(!text)return;
+  ctx.fillStyle="#0009";
+  ctx.fillRect(0,height-78,width,78);
+  ctx.fillStyle="white";
+  ctx.font="30px Georgia";
+  ctx.textAlign="center";
+  ctx.fillText(text,width/2,height-28,width-50);
 }
-
 async function exportVideo() {
-  if (!items.length) {
-    $("status").textContent = "Add photos or videos first.";
+  if(!items.length){
+    $("status").textContent="Add photos or videos first.";
     return;
   }
-  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
-    $("status").textContent = "Use a recent Chrome or Edge browser for video export.";
+  if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream){
+    $("status").textContent="Use a recent Chrome or Edge browser for video export.";
     return;
   }
-
-  playing = false;
+  playing=false;
   runId++;
   clearTimeout(timer);
   stopCurrentVideo();
-  $("play").textContent = "▶ Play slideshow";
-
-  const button = $("export");
-  button.disabled = true;
-  $("status").textContent = "Preparing video. Keep this page open.";
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 1920;
-  canvas.height = 1080;
-  const ctx = canvas.getContext("2d");
-  const stream = canvas.captureStream(30);
-  let audioContext = null, recorder = null;
-
-  try {
-    if (audio.src && !musicStopped) {
-      audioContext = new AudioContext();
-      const source = audioContext.createMediaElementSource(audio);
-      const gain = audioContext.createGain();
-      const destination = audioContext.createMediaStreamDestination();
-      gain.gain.value = Number($("volume").value) / 100;
+  $("play").textContent="▶ Play slideshow";
+  const button=$("export");
+  button.disabled=true;
+  $("status").textContent="Preparing video. Keep this page open.";
+  const canvas=document.createElement("canvas");
+  canvas.width=1920;
+  canvas.height=1080;
+  const ctx=canvas.getContext("2d");
+  const stream=canvas.captureStream(30);
+  let audioContext=null,recorder=null;
+  try{
+    if(audio.src&&!musicStopped){
+      audioContext=new AudioContext();
+      const source=audioContext.createMediaElementSource(audio);
+      const gain=audioContext.createGain();
+      const destination=audioContext.createMediaStreamDestination();
+      gain.gain.value=Number($("volume").value)/100;
       source.connect(gain);
       gain.connect(audioContext.destination);
       gain.connect(destination);
-      destination.stream.getAudioTracks().forEach(track => stream.addTrack(track));
-      audio.currentTime = 0;
+      destination.stream.getAudioTracks().forEach(track=>stream.addTrack(track));
+      audio.currentTime=0;
       await audioContext.resume();
       await audio.play();
     }
-
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-      ? "video/webm;codecs=vp9,opus" : "video/webm";
-    recorder = new MediaRecorder(stream, { mimeType });
-    const chunks = [];
-    recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
-    const finished = new Promise(resolve => { recorder.onstop = resolve; });
+    const mimeType=MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+      ?"video/webm;codecs=vp9,opus":"video/webm";
+    recorder=new MediaRecorder(stream,{mimeType});
+    const chunks=[];
+    recorder.ondataavailable=event=>{if(event.data.size)chunks.push(event.data)};
+    const finished=new Promise(resolve=>{recorder.onstop=resolve});
     recorder.start();
 
-    for (let index = 0; index < items.length; index++) {
-      const item = items[index];
-      $("status").textContent = `Recording item ${index + 1} of ${items.length}…`;
-
-      if (item.type === "image") {
-        const image = new Image();
-        image.src = item.url;
+    for(let index=0;index<items.length;index++){
+      const item=items[index];
+      $("status").textContent=`Recording item ${index+1} of ${items.length}…`;
+      if(item.type==="image"){
+        const image=new Image();
+        image.src=item.url;
         await image.decode();
-        ctx.fillStyle = "#211e1b";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        drawFitted(ctx, image, canvas.width, canvas.height);
-        drawCaption(ctx, item.caption, canvas.width, canvas.height);
-        await new Promise(resolve => setTimeout(resolve, Math.max(2, Number($("seconds").value) || 5) * 1000));
-      } else {
-        const video = document.createElement("video");
-        video.src = item.url;
-        video.muted = true;
-        video.playsInline = true;
-        await new Promise((resolve, reject) => {
-          video.onloadedmetadata = resolve;
-          video.onerror = reject;
+        ctx.fillStyle="#211e1b";
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        drawFitted(ctx,image,canvas.width,canvas.height);
+        drawCaption(ctx,item.caption,canvas.width,canvas.height);
+        await new Promise(resolve=>setTimeout(resolve,Math.max(2,Number($("seconds").value)||5)*1000));
+      }else{
+        const video=document.createElement("video");
+        video.src=item.url;
+        video.muted=true;
+        video.playsInline=true;
+        await new Promise((resolve,reject)=>{
+          video.onloadedmetadata=resolve;
+          video.onerror=reject;
         });
         await video.play();
-        await new Promise(resolve => {
-          function drawFrame() {
-            ctx.fillStyle = "#211e1b";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            drawFitted(ctx, video, canvas.width, canvas.height);
-            drawCaption(ctx, item.caption, canvas.width, canvas.height);
-            if (video.ended) resolve();
+        await new Promise(resolve=>{
+          function drawFrame(){
+            ctx.fillStyle="#211e1b";
+            ctx.fillRect(0,0,canvas.width,canvas.height);
+            drawFitted(ctx,video,canvas.width,canvas.height);
+            drawCaption(ctx,item.caption,canvas.width,canvas.height);
+            if(video.ended)resolve();
             else requestAnimationFrame(drawFrame);
           }
           drawFrame();
@@ -649,30 +632,28 @@ async function exportVideo() {
         video.remove();
       }
     }
-
     recorder.stop();
     await finished;
-    const blob = new Blob(chunks, { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "grandpa-memories.webm";
+    const blob=new Blob(chunks,{type:mimeType});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=url;
+    link.download="grandpa-memories.webm";
     link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    $("status").textContent = "Finished. Your video has downloaded.";
-  } catch (error) {
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    $("status").textContent="Finished. Your video has downloaded.";
+  }catch(error){
     console.error(error);
-    if (recorder?.state === "recording") recorder.stop();
-    $("status").textContent = "Export failed. Try smaller video files or the latest Chrome/Edge.";
-  } finally {
-    button.disabled = false;
+    if(recorder?.state==="recording")recorder.stop();
+    $("status").textContent="Export failed. Try smaller video files or the latest Chrome/Edge.";
+  }finally{
+    button.disabled=false;
     audio.pause();
-    if (audioContext) await audioContext.close().catch(() => {});
-    stream.getTracks().forEach(track => track.stop());
+    if(audioContext)await audioContext.close().catch(()=>{});
+    stream.getTracks().forEach(track=>track.stop());
   }
 }
-
-$("export").onclick = exportVideo;
+$("export").onclick=exportVideo;
 render();
 updateMusicButton();
 </script>
