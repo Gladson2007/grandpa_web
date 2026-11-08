@@ -1,4 +1,20 @@
+/* =========================================================
+   SETTINGS: fill these in to switch the QR gallery on
+   ========================================================= */
+const CONFIG = {
+  SUPABASE_URL: "",        // Project URL, e.g. "https://abcdxyz.supabase.co"
+  SUPABASE_ANON_KEY: "",   // anon public key from Project Settings > API
+  BUCKET: "memories",      // keep this name (same as in the SQL)
+  PUBLIC_SITE_URL: ""      // optional, e.g. "https://grandpa-memories.netlify.app/"
+};
+
 const $ = id => document.getElementById(id);
+const IS_GALLERY = new URLSearchParams(location.search).has("gallery");
+
+const sb =
+  CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY && window.supabase
+    ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
+    : null;
 
 const stage = $("stage");
 const mediaList = $("mediaList");
@@ -7,12 +23,18 @@ const slideName = $("slideName");
 const progressBar = $("progressBar");
 const audio = $("audio");
 
-const PLACEHOLDER = `
-  <div class="placeholder" style="color:#61738a;font-style:italic">
-    Add photos or videos to start the slideshow
-  </div>
-`;
+const PLACEHOLDER =
+  '<div class="placeholder">Add photos or videos to start the slideshow</div>';
 
+const BADGES = {
+  local: "On this device only",
+  pending: "Waiting…",
+  uploading: "Saving…",
+  saved: "☁ Saved to QR gallery",
+  failed: "⚠ Not saved · Retry"
+};
+
+// each item: { id, name, url, type, caption, file, path, state, badgeEl }
 const items = [];
 
 let current = 0;
@@ -24,6 +46,10 @@ let musicStopped = false;
 let shuffleEnabled = false;
 let musicUrl = null;
 let touchStartX = 0;
+
+function setStatus(message) {
+  $("status").textContent = message;
+}
 
 function updateHeader() {
   $("heading").textContent =
@@ -50,10 +76,391 @@ function updateCounter() {
   }
 
   counter.textContent = `${current + 1} / ${items.length}`;
-  slideName.textContent = items[current].file.name;
+  slideName.textContent = items[current].name;
 }
 
-/* ---------- timers ---------- */
+/* =========================================================
+   CLOUD (Supabase): makes the QR gallery work
+   ========================================================= */
+
+async function fetchMemories() {
+  const { data, error } = await sb
+    .from("memories")
+    .select("*")
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return data;
+}
+
+function setItemState(item, state) {
+  item.state = state;
+
+  if (item.badgeEl) {
+    item.badgeEl.textContent = BADGES[state];
+    item.badgeEl.className = `badge ${state}`;
+  }
+}
+
+async function uploadItem(item) {
+  setItemState(item, "uploading");
+
+  try {
+    const ext = (item.name.split(".").pop() || "bin")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "bin";
+
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    const { error } = await sb.storage
+      .from(CONFIG.BUCKET)
+      .upload(path, item.file, {
+        contentType: item.file.type,
+        cacheControl: "31536000"
+      });
+
+    if (error) throw error;
+
+    const { data } = sb.storage.from(CONFIG.BUCKET).getPublicUrl(path);
+
+    const { data: row, error: dbError } = await sb
+      .from("memories")
+      .insert({
+        url: data.publicUrl,
+        path,
+        type: item.type,
+        name: item.name,
+        caption: item.caption,
+        position: items.indexOf(item)
+      })
+      .select()
+      .single();
+
+    if (dbError) throw dbError;
+
+    item.id = row.id;
+    item.path = path;
+    item.file = null;
+    setItemState(item, "saved");
+
+    if (!items.includes(item)) {
+      deleteFromCloud(item); // removed while uploading
+    } else {
+      syncCaption(item);
+    }
+  } catch (error) {
+    console.error(error);
+    setItemState(item, "failed");
+  }
+}
+
+async function uploadQueue(list) {
+  let done = 0;
+
+  for (const item of list) {
+    if (!items.includes(item)) continue;
+
+    setStatus(`Saving to cloud… ${done + 1} of ${list.length}`);
+    await uploadItem(item);
+    done++;
+  }
+
+  const failed = list.filter(item => item.state === "failed").length;
+
+  setStatus(
+    failed
+      ? `${failed} file(s) could not be saved. Click "Not saved" to retry.`
+      : "All memories saved. The QR gallery is up to date."
+  );
+
+  syncOrder();
+}
+
+async function deleteFromCloud(item) {
+  if (!sb || !item.id) return;
+
+  await sb.from("memories").delete().eq("id", item.id);
+
+  if (item.path) {
+    await sb.storage.from(CONFIG.BUCKET).remove([item.path]);
+  }
+}
+
+const captionTimers = new Map();
+
+function syncCaption(item) {
+  if (!sb || !item.id) return;
+
+  clearTimeout(captionTimers.get(item));
+
+  captionTimers.set(item, setTimeout(() => {
+    sb.from("memories")
+      .update({ caption: item.caption })
+      .eq("id", item.id)
+      .then(() => {});
+  }, 700));
+}
+
+let orderTimer = null;
+
+function syncOrder() {
+  if (!sb) return;
+
+  clearTimeout(orderTimer);
+
+  orderTimer = setTimeout(() => {
+    items.forEach((item, index) => {
+      if (item.id) {
+        sb.from("memories")
+          .update({ position: index })
+          .eq("id", item.id)
+          .then(() => {});
+      }
+    });
+  }, 800);
+}
+
+async function loadSavedMemories() {
+  if (!sb) return;
+
+  try {
+    const rows = await fetchMemories();
+
+    rows.forEach(row => {
+      items.push({
+        id: row.id,
+        name: row.name || "memory",
+        url: row.url,
+        type: row.type,
+        caption: row.caption || "",
+        file: null,
+        path: row.path,
+        state: "saved"
+      });
+    });
+
+    if (rows.length) {
+      render();
+      setStatus(`${rows.length} saved memories loaded.`);
+    }
+  } catch (error) {
+    console.error(error);
+    setStatus("Could not load saved memories. Check your Supabase settings.");
+  }
+}
+
+/* =========================================================
+   QR CODE
+   ========================================================= */
+
+function getGalleryUrl() {
+  let base = CONFIG.PUBLIC_SITE_URL.trim();
+
+  if (!base && /^https?:$/.test(location.protocol)) {
+    base = location.origin + location.pathname;
+  }
+
+  return base ? base.split(/[?#]/)[0] + "?gallery" : "";
+}
+
+function drawQR(target, size) {
+  target.innerHTML = "";
+
+  const url = getGalleryUrl();
+  if (!url || !window.QRCode) return false;
+
+  new QRCode(target, {
+    text: url,
+    width: size,
+    height: size,
+    colorDark: "#16243b",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  return true;
+}
+
+function setupQR() {
+  const size = window.innerWidth <= 700 ? 84 : 104;
+  const ready = Boolean(sb) && drawQR($("qrCode"), size);
+
+  $("qrCard").classList.toggle("inactive", !ready);
+  $("qrLabel").textContent = ready
+    ? "Scan to see all memories"
+    : "QR not active yet";
+
+  if (!sb) {
+    $("cloudNote").textContent =
+      "The QR gallery is off. Add SUPABASE_URL and SUPABASE_ANON_KEY at the top of app.js, then open this page from your online website link.";
+  } else if (!getGalleryUrl()) {
+    $("cloudNote").textContent =
+      "Open this page from your online website link (or set PUBLIC_SITE_URL in app.js) so the QR code can work.";
+  } else {
+    $("cloudNote").textContent =
+      "Everything you add here is saved online and appears in the QR gallery.";
+  }
+}
+
+$("qrCard").addEventListener("click", () => {
+  if ($("qrCard").classList.contains("inactive")) {
+    setStatus($("cloudNote").textContent);
+    return;
+  }
+
+  drawQR($("qrBig"), 300);
+  $("qrUrl").textContent = getGalleryUrl();
+  $("qrModal").hidden = false;
+});
+
+$("qrModal").addEventListener("click", () => {
+  $("qrModal").hidden = true;
+});
+
+/* =========================================================
+   GUEST GALLERY (page opened by scanning the QR code)
+   ========================================================= */
+
+let galleryItems = [];
+let lightboxIndex = 0;
+let lightboxTouchX = 0;
+
+async function initGallery() {
+  document.body.classList.add("gallery-mode");
+  document.title = "Grandpa's Memories · Gallery";
+
+  const status = $("galleryStatus");
+
+  if (!sb) {
+    status.textContent = "The gallery is not connected yet.";
+    return;
+  }
+
+  status.textContent = "Loading memories…";
+
+  try {
+    galleryItems = await fetchMemories();
+  } catch (error) {
+    console.error(error);
+    status.textContent = "Could not load the memories. Please try again.";
+    return;
+  }
+
+  status.textContent = galleryItems.length
+    ? ""
+    : "No memories have been added yet.";
+
+  const photos = galleryItems.filter(row => row.type === "image").length;
+  const videos = galleryItems.length - photos;
+
+  $("galleryCount").textContent = galleryItems.length
+    ? `${photos} PHOTOS · ${videos} VIDEOS`
+    : "";
+
+  renderGalleryGrid();
+}
+
+function renderGalleryGrid() {
+  const grid = $("galleryGrid");
+  grid.innerHTML = "";
+
+  galleryItems.forEach((row, index) => {
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = "tile";
+    tile.setAttribute("aria-label", row.caption || `Open memory ${index + 1}`);
+
+    if (row.type === "video") {
+      const video = document.createElement("video");
+      video.src = `${row.url}#t=0.1`;
+      video.preload = "metadata";
+      video.muted = true;
+      video.playsInline = true;
+      tile.appendChild(video);
+
+      const badge = document.createElement("span");
+      badge.className = "play-badge";
+      badge.textContent = "▶";
+      tile.appendChild(badge);
+    } else {
+      const img = document.createElement("img");
+      img.src = row.url;
+      img.loading = "lazy";
+      img.alt = row.caption || row.name || "Memory";
+      tile.appendChild(img);
+    }
+
+    tile.addEventListener("click", () => openLightbox(index));
+    grid.appendChild(tile);
+  });
+}
+
+function openLightbox(index) {
+  if (!galleryItems.length) return;
+
+  lightboxIndex = (index + galleryItems.length) % galleryItems.length;
+
+  const row = galleryItems[lightboxIndex];
+  const holder = $("lightboxMedia");
+  holder.innerHTML = "";
+
+  const media = document.createElement(row.type === "video" ? "video" : "img");
+  media.src = row.url;
+
+  if (row.type === "video") {
+    media.controls = true;
+    media.autoplay = true;
+    media.playsInline = true;
+  } else {
+    media.alt = row.caption || row.name || "Memory";
+  }
+
+  holder.appendChild(media);
+
+  $("lightboxCaption").textContent = row.caption || "";
+  $("lightboxCount").textContent = `${lightboxIndex + 1} / ${galleryItems.length}`;
+  $("lightbox").hidden = false;
+}
+
+function closeLightbox() {
+  $("lightbox").hidden = true;
+  $("lightboxMedia").innerHTML = "";
+}
+
+function handleGalleryKeys(event) {
+  if ($("lightbox").hidden) return;
+
+  if (event.key === "Escape") closeLightbox();
+  if (event.key === "ArrowRight") openLightbox(lightboxIndex + 1);
+  if (event.key === "ArrowLeft") openLightbox(lightboxIndex - 1);
+}
+
+$("lbClose").addEventListener("click", closeLightbox);
+$("lbPrev").addEventListener("click", () => openLightbox(lightboxIndex - 1));
+$("lbNext").addEventListener("click", () => openLightbox(lightboxIndex + 1));
+
+$("lightbox").addEventListener("click", event => {
+  if (event.target === $("lightbox") || event.target === $("lightboxMedia")) {
+    closeLightbox();
+  }
+});
+
+$("lightbox").addEventListener("touchstart", event => {
+  lightboxTouchX = event.changedTouches[0].screenX;
+}, { passive: true });
+
+$("lightbox").addEventListener("touchend", event => {
+  const distance = event.changedTouches[0].screenX - lightboxTouchX;
+
+  if (Math.abs(distance) < 60) return;
+
+  openLightbox(lightboxIndex + (distance < 0 ? 1 : -1));
+}, { passive: true });
+
+/* =========================================================
+   TIMERS
+   ========================================================= */
 
 function clearTimers() {
   clearTimeout(advanceTimer);
@@ -76,7 +483,9 @@ function startImageTimer() {
   advanceTimer = setTimeout(nextSlide, duration);
 }
 
-/* ---------- video / music ---------- */
+/* =========================================================
+   VIDEO + MUSIC
+   ========================================================= */
 
 function setVideoMuted(value) {
   videoMuted = value;
@@ -100,15 +509,14 @@ function playVideo(video) {
     promise.catch(error => {
       if (error.name === "NotAllowedError" && !videoMuted) {
         setVideoMuted(true);
-        $("status").textContent =
-          "Your browser blocked sound, so the video is playing muted. Press Unmute video to hear it.";
+        setStatus("Your browser blocked sound, so the video is playing muted. Press Unmute video to hear it.");
         video.play().catch(() => {});
       }
     });
   }
 }
 
-// Background music pauses while a video is playing with its own sound
+// Background music pauses while a video plays with its own sound
 function updateMusic() {
   if (!audio.src) return;
 
@@ -130,7 +538,7 @@ function updateMusicButton() {
 }
 
 function handleVideoError(item) {
-  $("status").textContent = `Could not play "${item.file.name}". Skipping it.`;
+  setStatus(`Could not play "${item.name}". Skipping it.`);
 
   if (!playing) return;
 
@@ -143,7 +551,9 @@ function handleVideoError(item) {
   }
 }
 
-/* ---------- rendering ---------- */
+/* =========================================================
+   RENDERING
+   ========================================================= */
 
 function createMedia(item) {
   const element = document.createElement(
@@ -174,7 +584,7 @@ function createMedia(item) {
 
     element.addEventListener("error", () => handleVideoError(item));
   } else {
-    element.alt = item.file.name;
+    element.alt = item.name;
   }
 
   return element;
@@ -187,8 +597,7 @@ function updateCaption() {
   if (!item || !item.caption) return;
 
   const caption = document.createElement("div");
-  caption.className =
-    item.type === "video" ? "caption on-video" : "caption";
+  caption.className = item.type === "video" ? "caption on-video" : "caption";
   caption.textContent = item.caption;
   stage.appendChild(caption);
 }
@@ -205,7 +614,7 @@ function createPageAnimation(direction) {
       : "memory-page turn-next";
 
   const copy = oldMedia.cloneNode(true);
-  copy.classList.remove("current-media"); // so it is not deleted below
+  copy.classList.remove("current-media");
   copy.controls = false;
   copy.muted = true;
 
@@ -250,7 +659,6 @@ function render(animate = false, direction = "next") {
   const oldVideo = getCurrentVideo();
   if (oldVideo) oldVideo.pause();
 
-  // also removes the "add photos or videos" text
   stage
     .querySelectorAll(".placeholder,.current-media,.caption")
     .forEach(node => node.remove());
@@ -290,7 +698,7 @@ function renderMediaList() {
     const filename = document.createElement("span");
     filename.className = "filename";
     filename.textContent =
-      `${item.type === "video" ? "▶ " : "▧ "}${item.file.name}`;
+      `${item.type === "video" ? "▶ " : "▧ "}${item.name}`;
 
     const caption = document.createElement("input");
     caption.type = "text";
@@ -302,9 +710,22 @@ function renderMediaList() {
     // only the caption changes: the video / timer is not restarted
     caption.addEventListener("input", event => {
       item.caption = event.target.value;
+      syncCaption(item);
 
       if (index === current) {
         updateCaption();
+      }
+    });
+
+    const badge = document.createElement("span");
+    item.badgeEl = badge;
+    setItemState(item, item.state);
+
+    badge.addEventListener("click", event => {
+      event.stopPropagation();
+
+      if (item.state === "failed") {
+        uploadQueue([item]);
       }
     });
 
@@ -332,7 +753,7 @@ function renderMediaList() {
       removeItem(index);
     };
 
-    row.append(thumbnail, filename, caption, up, down, remove);
+    row.append(thumbnail, filename, caption, badge, up, down, remove);
 
     row.addEventListener("click", () => {
       const direction = index > current ? "next" : "previous";
@@ -344,31 +765,46 @@ function renderMediaList() {
   });
 }
 
-/* ---------- list actions ---------- */
+/* =========================================================
+   LIST ACTIONS
+   ========================================================= */
 
 function addFiles(fileList) {
-  for (const file of fileList) {
-    if (
-      !file.type.startsWith("image/") &&
-      !file.type.startsWith("video/")
-    ) {
-      continue;
-    }
+  const added = [];
 
-    items.push({
-      file,
+  for (const file of fileList) {
+    if (!/^(image|video)\//.test(file.type)) continue;
+
+    const item = {
+      id: null,
+      name: file.name,
       url: URL.createObjectURL(file),
       type: file.type.startsWith("video/") ? "video" : "image",
-      caption: ""
-    });
+      caption: "",
+      file,
+      path: null,
+      state: sb ? "pending" : "local"
+    };
+
+    items.push(item);
+    added.push(item);
   }
 
   render();
+
+  if (sb && added.length) {
+    uploadQueue(added);
+  }
 }
 
 function removeItem(index) {
-  URL.revokeObjectURL(items[index].url);
-  items.splice(index, 1);
+  const [item] = items.splice(index, 1);
+
+  if (item.url.startsWith("blob:")) {
+    URL.revokeObjectURL(item.url);
+  }
+
+  deleteFromCloud(item);
 
   if (index < current) {
     current--;
@@ -377,6 +813,7 @@ function removeItem(index) {
   }
 
   render();
+  syncOrder();
 }
 
 function moveItem(index, direction) {
@@ -389,9 +826,12 @@ function moveItem(index, direction) {
   [items[index], items[target]] = [items[target], items[index]];
   current = target;
   render();
+  syncOrder();
 }
 
-/* ---------- navigation ---------- */
+/* =========================================================
+   NAVIGATION + CONTROLS
+   ========================================================= */
 
 function nextSlide() {
   if (!items.length) return;
@@ -431,12 +871,11 @@ function stopSlideshow() {
 
 function startSlideshow() {
   if (!items.length) {
-    $("status").textContent =
-      "Add at least one photo or video to start the slideshow.";
+    setStatus("Add at least one photo or video to start the slideshow.");
     return;
   }
 
-  $("status").textContent = "";
+  setStatus("");
   playing = true;
 
   $("play").textContent = "❚❚ Pause slideshow";
@@ -481,7 +920,9 @@ function toggleShuffle() {
     shuffleEnabled ? "🔀 Shuffle: On" : "🔀 Shuffle: Off";
 }
 
-/* ---------- events ---------- */
+/* =========================================================
+   EVENTS
+   ========================================================= */
 
 $("filesInput").addEventListener("change", event => {
   addFiles(event.target.files);
@@ -541,7 +982,7 @@ $("volume").addEventListener("input", event => {
 
 $("musicToggle").addEventListener("click", () => {
   if (!audio.src) {
-    $("status").textContent = "Choose a music file first.";
+    setStatus("Choose a music file first.");
     return;
   }
 
@@ -567,6 +1008,16 @@ stage.addEventListener("touchend", event => {
 }, { passive: true });
 
 document.addEventListener("keydown", event => {
+  if (IS_GALLERY) {
+    handleGalleryKeys(event);
+    return;
+  }
+
+  if (event.key === "Escape" && !$("qrModal").hidden) {
+    $("qrModal").hidden = true;
+    return;
+  }
+
   const active = document.activeElement;
   const typing =
     active &&
@@ -613,6 +1064,16 @@ document.addEventListener("fullscreenchange", () => {
       : "⛶ Fullscreen";
 });
 
-render();
-updateHeader();
-updateMusicButton();
+/* =========================================================
+   START
+   ========================================================= */
+
+if (IS_GALLERY) {
+  initGallery();
+} else {
+  render();
+  updateHeader();
+  updateMusicButton();
+  setupQR();
+  loadSavedMemories();
+}
