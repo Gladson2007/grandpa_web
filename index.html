@@ -18,14 +18,9 @@
       --shadow: 0 18px 50px rgba(42, 65, 94, .18);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
-    html {
-      scroll-behavior: smooth;
-      background: var(--paper);
-    }
+    html { scroll-behavior: smooth; background: var(--paper); }
 
     body {
       margin: 0;
@@ -35,16 +30,9 @@
       transition: background .4s ease, color .4s ease;
     }
 
-    body.presentation-mode {
-      background: #101722;
-      color: white;
-    }
+    body.presentation-mode { background: #101722; color: white; }
 
-    main {
-      width: min(1400px, 100%);
-      margin: auto;
-      padding: 18px 24px 70px;
-    }
+    main { width: min(1400px, 100%); margin: auto; padding: 18px 24px 70px; }
 
     .topline {
       display: flex;
@@ -58,11 +46,7 @@
       text-transform: uppercase;
     }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .brand { display: flex; align-items: center; gap: 10px; }
 
     .brand-icon {
       width: 34px;
@@ -132,21 +116,11 @@
       box-shadow: var(--shadow);
     }
 
-    body.presentation-mode .panel {
-      background: #182332;
-      border-color: #32445b;
-    }
+    body.presentation-mode .panel { background: #182332; border-color: #32445b; }
 
-    .slideshow-panel {
-      padding: 18px;
-    }
+    .slideshow-panel { padding: 18px; }
 
-    .stage-wrap {
-      position: relative;
-      width: 100%;
-      max-width: 1250px;
-      margin: auto;
-    }
+    .stage-wrap { position: relative; width: 100%; max-width: 1250px; margin: auto; }
 
     #stage {
       position: relative;
@@ -204,9 +178,7 @@
       pointer-events: none;
     }
 
-    .memory-page.turn-next {
-      animation: pageTurnNext .72s ease both;
-    }
+    .memory-page.turn-next { animation: pageTurnNext .72s ease both; }
 
     .memory-page.turn-previous {
       transform-origin: right center;
@@ -214,33 +186,15 @@
     }
 
     @keyframes pageTurnNext {
-      0% {
-        transform: rotateY(0);
-        box-shadow: none;
-      }
-      45% {
-        transform: rotateY(-88deg);
-        box-shadow: 18px 0 25px rgba(0,0,0,.25);
-      }
-      100% {
-        transform: rotateY(-180deg);
-        opacity: 0;
-      }
+      0% { transform: rotateY(0); box-shadow: none; }
+      45% { transform: rotateY(-88deg); box-shadow: 18px 0 25px rgba(0,0,0,.25); }
+      100% { transform: rotateY(-180deg); opacity: 0; }
     }
 
     @keyframes pageTurnPrevious {
-      0% {
-        transform: rotateY(0);
-        opacity: 1;
-      }
-      45% {
-        transform: rotateY(88deg);
-        box-shadow: -18px 0 25px rgba(0,0,0,.25);
-      }
-      100% {
-        transform: rotateY(180deg);
-        opacity: 0;
-      }
+      0% { transform: rotateY(0); opacity: 1; }
+      45% { transform: rotateY(88deg); box-shadow: -18px 0 25px rgba(0,0,0,.25); }
+      100% { transform: rotateY(180deg); opacity: 0; }
     }
 
     .caption {
@@ -257,6 +211,9 @@
       font-size: clamp(15px, 2vw, 23px);
       backdrop-filter: blur(8px);
     }
+
+    /* keeps the caption above the video control bar */
+    .caption.on-video { bottom: 75px; }
 
     .progress {
       height: 5px;
@@ -307,10 +264,7 @@
     }
 
     button:hover,
-    .file-button:hover {
-      background: var(--accent-dark);
-      transform: translateY(-2px);
-    }
+    .file-button:hover { background: var(--accent-dark); transform: translateY(-2px); }
 
     button.secondary {
       color: var(--ink);
@@ -319,23 +273,11 @@
       box-shadow: none;
     }
 
-    body.presentation-mode button.secondary {
-      color: white;
-      border-color: #54677d;
-    }
+    body.presentation-mode button.secondary { color: white; border-color: #54677d; }
 
-    button:disabled {
-      opacity: .5;
-      cursor: not-allowed;
-      transform: none;
-    }
+    button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
-    .section-heading {
-      display: flex;
-      gap: 14px;
-      align-items: flex-start;
-      margin-bottom: 18px;
-    }
+    .section-heading { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
 
     .section-number {
       display: grid;
@@ -349,38 +291,17 @@
       font-weight: 700;
     }
 
-    h2 {
-      margin: 0;
-      font-size: 21px;
-      font-weight: 500;
-    }
+    h2 { margin: 0; font-size: 21px; font-weight: 500; }
 
-    .section-heading p {
-      margin: 5px 0 0;
-      color: var(--muted);
-      font-size: 14px;
-    }
+    .section-heading p { margin: 5px 0 0; color: var(--muted); font-size: 14px; }
 
-    .upload-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
+    .upload-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
-    .file-button input {
-      display: none;
-    }
+    .file-button input { display: none; }
 
-    .settings {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 15px;
-    }
+    .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
 
-    label {
-      font-weight: 700;
-      font-size: 14px;
-    }
+    label { font-weight: 700; font-size: 14px; }
 
     input[type="text"],
     input[type="number"] {
@@ -392,14 +313,9 @@
       font: 15px Georgia, serif;
     }
 
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--accent);
-    }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
 
-    #mediaList {
-      margin-top: 16px;
-    }
+    #mediaList { margin-top: 16px; }
 
     .item {
       display: flex;
@@ -414,9 +330,7 @@
       cursor: pointer;
     }
 
-    .item.active {
-      border: 2px solid var(--accent);
-    }
+    .item.active { border: 2px solid var(--accent); }
 
     .item img,
     .item video {
@@ -427,12 +341,7 @@
       background: #a8bdd1;
     }
 
-    .filename {
-      flex: 1;
-      min-width: 130px;
-      overflow-wrap: anywhere;
-      font: 14px system-ui, sans-serif;
-    }
+    .filename { flex: 1; min-width: 130px; overflow-wrap: anywhere; font: 14px system-ui, sans-serif; }
 
     .item input {
       flex: 1 1 160px;
@@ -458,37 +367,14 @@
     }
 
     @media (max-width: 700px) {
-      main {
-        padding: 12px 10px 45px;
-      }
-
-      .topline {
-        font-size: 10px;
-      }
-
-      .topline > span:last-child {
-        display: none;
-      }
-
-      #stage {
-        min-height: 55vh;
-        border-width: 5px;
-        border-radius: 17px;
-      }
-
-      .settings {
-        grid-template-columns: 1fr;
-      }
-
-      .caption {
-        right: 12px;
-        bottom: 12px;
-        left: 12px;
-      }
-
-      .controls button {
-        flex: 1 1 auto;
-      }
+      main { padding: 12px 10px 45px; }
+      .topline { font-size: 10px; }
+      .topline > span:last-child { display: none; }
+      #stage { min-height: 55vh; border-width: 5px; border-radius: 17px; }
+      .settings { grid-template-columns: 1fr; }
+      .caption { right: 12px; bottom: 12px; left: 12px; }
+      .caption.on-video { bottom: 65px; }
+      .controls button { flex: 1 1 auto; }
     }
   </style>
 </head>
@@ -514,8 +400,8 @@
     <section class="panel slideshow-panel" aria-label="Slideshow">
       <div class="stage-wrap">
         <div id="stage" tabindex="0">
-          <div style="color:#61738a;font-style:italic">
-           add some photos or videos to start the slideshow
+          <div class="placeholder" style="color:#61738a;font-style:italic">
+            Add photos or videos to start the slideshow
           </div>
         </div>
 
@@ -598,7 +484,7 @@
         </label>
 
         <label>
-          Seconds per photo
+          Seconds per photo (videos play to the end)
           <input id="seconds" type="number" min="2" max="30" value="5">
         </label>
 
