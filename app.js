@@ -7,17 +7,22 @@ const slideName = $("slideName");
 const progressBar = $("progressBar");
 const audio = $("audio");
 
+const PLACEHOLDER = `
+  <div class="placeholder" style="color:#61738a;font-style:italic">
+    Add photos or videos to start the slideshow
+  </div>
+`;
+
 const items = [];
 
 let current = 0;
-let timer = null;
+let advanceTimer = null;
 let progressTimer = null;
 let playing = false;
 let videoMuted = false;
 let musicStopped = false;
 let shuffleEnabled = false;
 let musicUrl = null;
-let lastDirection = "next";
 let touchStartX = 0;
 
 function updateHeader() {
@@ -33,6 +38,10 @@ function getSeconds() {
   return Math.max(2, Number($("seconds").value) || 5);
 }
 
+function getCurrentVideo() {
+  return stage.querySelector("video.current-media");
+}
+
 function updateCounter() {
   if (!items.length) {
     counter.textContent = "0 / 0";
@@ -44,23 +53,97 @@ function updateCounter() {
   slideName.textContent = items[current].file.name;
 }
 
-function clearProgress() {
+/* ---------- timers ---------- */
+
+function clearTimers() {
+  clearTimeout(advanceTimer);
   clearInterval(progressTimer);
+  advanceTimer = null;
+  progressTimer = null;
   progressBar.style.width = "0%";
 }
 
-function startProgress() {
-  clearInterval(progressTimer);
-
+// Photos only: change after "Seconds per photo"
+function startImageTimer() {
   const startedAt = Date.now();
   const duration = getSeconds() * 1000;
 
   progressTimer = setInterval(() => {
-    const elapsed = Date.now() - startedAt;
-    const percent = Math.min(100, elapsed / duration * 100);
+    const percent = Math.min(100, (Date.now() - startedAt) / duration * 100);
     progressBar.style.width = `${percent}%`;
   }, 50);
+
+  advanceTimer = setTimeout(nextSlide, duration);
 }
+
+/* ---------- video / music ---------- */
+
+function setVideoMuted(value) {
+  videoMuted = value;
+
+  const video = getCurrentVideo();
+  if (video) video.muted = videoMuted;
+
+  $("videoMute").textContent = videoMuted
+    ? "🔇 Unmute video"
+    : "🔊 Mute video";
+
+  updateMusic();
+}
+
+function playVideo(video) {
+  video.muted = videoMuted;
+
+  const promise = video.play();
+
+  if (promise && promise.catch) {
+    promise.catch(error => {
+      if (error.name === "NotAllowedError" && !videoMuted) {
+        setVideoMuted(true);
+        $("status").textContent =
+          "Your browser blocked sound, so the video is playing muted. Press Unmute video to hear it.";
+        video.play().catch(() => {});
+      }
+    });
+  }
+}
+
+// Background music pauses while a video is playing with its own sound
+function updateMusic() {
+  if (!audio.src) return;
+
+  const item = items[current];
+  const videoHasSound =
+    playing && item && item.type === "video" && !videoMuted;
+
+  if (musicStopped || videoHasSound) {
+    audio.pause();
+  } else {
+    audio.play().catch(() => {});
+  }
+}
+
+function updateMusicButton() {
+  $("musicToggle").textContent = musicStopped
+    ? "▶ Play music"
+    : "⏹ Stop music";
+}
+
+function handleVideoError(item) {
+  $("status").textContent = `Could not play "${item.file.name}". Skipping it.`;
+
+  if (!playing) return;
+
+  if (items.length > 1) {
+    setTimeout(() => {
+      if (playing && items[current] === item) nextSlide();
+    }, 1500);
+  } else {
+    stopSlideshow();
+  }
+}
+
+/* ---------- rendering ---------- */
 
 function createMedia(item) {
   const element = document.createElement(
@@ -74,7 +157,22 @@ function createMedia(item) {
   if (item.type === "video") {
     element.controls = true;
     element.playsInline = true;
+    element.preload = "auto";
     element.muted = videoMuted;
+
+    // Video plays to the very end, then the next slide comes
+    element.addEventListener("ended", () => {
+      if (playing) nextSlide();
+    });
+
+    element.addEventListener("timeupdate", () => {
+      if (playing && element.duration) {
+        progressBar.style.width =
+          `${element.currentTime / element.duration * 100}%`;
+      }
+    });
+
+    element.addEventListener("error", () => handleVideoError(item));
   } else {
     element.alt = item.file.name;
   }
@@ -82,7 +180,23 @@ function createMedia(item) {
   return element;
 }
 
+function updateCaption() {
+  stage.querySelectorAll(".caption").forEach(node => node.remove());
+
+  const item = items[current];
+  if (!item || !item.caption) return;
+
+  const caption = document.createElement("div");
+  caption.className =
+    item.type === "video" ? "caption on-video" : "caption";
+  caption.textContent = item.caption;
+  stage.appendChild(caption);
+}
+
 function createPageAnimation(direction) {
+  const oldMedia = stage.querySelector(".current-media");
+  if (!oldMedia) return;
+
   const oldPage = document.createElement("div");
 
   oldPage.className =
@@ -90,29 +204,39 @@ function createPageAnimation(direction) {
       ? "memory-page turn-previous"
       : "memory-page turn-next";
 
-  const oldMedia = stage.querySelector(".current-media");
+  const copy = oldMedia.cloneNode(true);
+  copy.classList.remove("current-media"); // so it is not deleted below
+  copy.controls = false;
+  copy.muted = true;
 
-  if (oldMedia) {
-    const copy = oldMedia.cloneNode(true);
-    copy.controls = false;
-    oldPage.appendChild(copy);
-    stage.appendChild(oldPage);
+  oldPage.appendChild(copy);
+  stage.appendChild(oldPage);
 
-    setTimeout(() => oldPage.remove(), 800);
+  setTimeout(() => oldPage.remove(), 800);
+}
+
+function scheduleCurrent() {
+  clearTimers();
+
+  if (!playing || !items.length) return;
+
+  if (items[current].type === "video") {
+    const video = getCurrentVideo();
+    if (video) playVideo(video);
+  } else {
+    startImageTimer();
   }
+
+  updateMusic();
 }
 
 function render(animate = false, direction = "next") {
   updateHeader();
 
   if (!items.length) {
-    stage.innerHTML = `
-      <div style="color:#61738a;font-style:italic">
-        Add photos and videos below
-      </div>
-    `;
+    stopSlideshow();
+    stage.innerHTML = PLACEHOLDER;
     updateCounter();
-    clearProgress();
     mediaList.innerHTML = "";
     return;
   }
@@ -123,31 +247,24 @@ function render(animate = false, direction = "next") {
     createPageAnimation(direction);
   }
 
-  const item = items[current];
-  const media = createMedia(item);
+  const oldVideo = getCurrentVideo();
+  if (oldVideo) oldVideo.pause();
 
-  stage.querySelectorAll(".current-media,.caption").forEach(node => {
-    node.remove();
-  });
+  // also removes the "add photos or videos" text
+  stage
+    .querySelectorAll(".placeholder,.current-media,.caption")
+    .forEach(node => node.remove());
 
-  stage.appendChild(media);
+  stage.appendChild(createMedia(items[current]));
 
-  if (item.caption) {
-    const caption = document.createElement("div");
-    caption.className = "caption";
-    caption.textContent = item.caption;
-    stage.appendChild(caption);
-  }
-
+  updateCaption();
   updateCounter();
   renderMediaList();
 
   if (playing) {
-    startProgress();
-
-    if (item.type === "video") {
-      media.play().catch(() => {});
-    }
+    scheduleCurrent();
+  } else {
+    clearTimers();
   }
 }
 
@@ -180,11 +297,14 @@ function renderMediaList() {
     caption.placeholder = "Optional caption";
     caption.value = item.caption;
 
+    caption.addEventListener("click", event => event.stopPropagation());
+
+    // only the caption changes: the video / timer is not restarted
     caption.addEventListener("input", event => {
       item.caption = event.target.value;
 
       if (index === current) {
-        render(false);
+        updateCaption();
       }
     });
 
@@ -215,14 +335,16 @@ function renderMediaList() {
     row.append(thumbnail, filename, caption, up, down, remove);
 
     row.addEventListener("click", () => {
-      lastDirection = index > current ? "next" : "previous";
+      const direction = index > current ? "next" : "previous";
       current = index;
-      render(true, lastDirection);
+      render(true, direction);
     });
 
     mediaList.appendChild(row);
   });
 }
+
+/* ---------- list actions ---------- */
 
 function addFiles(fileList) {
   for (const file of fileList) {
@@ -241,10 +363,6 @@ function addFiles(fileList) {
     });
   }
 
-  if (items.length === 1) {
-    current = 0;
-  }
-
   render();
 }
 
@@ -252,7 +370,9 @@ function removeItem(index) {
   URL.revokeObjectURL(items[index].url);
   items.splice(index, 1);
 
-  if (current >= items.length) {
+  if (index < current) {
+    current--;
+  } else if (current >= items.length) {
     current = Math.max(0, items.length - 1);
   }
 
@@ -271,6 +391,8 @@ function moveItem(index, direction) {
   render();
 }
 
+/* ---------- navigation ---------- */
+
 function nextSlide() {
   if (!items.length) return;
 
@@ -284,7 +406,6 @@ function nextSlide() {
     current = (current + 1) % items.length;
   }
 
-  lastDirection = "next";
   render(true, "next");
 }
 
@@ -292,53 +413,36 @@ function previousSlide() {
   if (!items.length) return;
 
   current = (current - 1 + items.length) % items.length;
-  lastDirection = "previous";
   render(true, "previous");
 }
 
 function stopSlideshow() {
   playing = false;
-  clearInterval(timer);
-  clearProgress();
+  clearTimers();
 
   $("play").textContent = "▶ Play slideshow";
   $("play").setAttribute("aria-pressed", "false");
 
-  const video = stage.querySelector("video");
+  const video = getCurrentVideo();
   if (video) video.pause();
 
-  if (musicStopped || audio.src) {
-    audio.pause();
-  }
+  audio.pause();
 }
 
 function startSlideshow() {
   if (!items.length) {
-    $("status").textContent = "Add at least one photo or video to start the slideshow.";
+    $("status").textContent =
+      "Add at least one photo or video to start the slideshow.";
     return;
   }
 
+  $("status").textContent = "";
   playing = true;
 
   $("play").textContent = "❚❚ Pause slideshow";
   $("play").setAttribute("aria-pressed", "true");
 
-  clearInterval(timer);
-
-  timer = setInterval(() => {
-    nextSlide();
-  }, getSeconds() * 1000);
-
-  startProgress();
-
-  const video = stage.querySelector("video");
-  if (video) {
-    video.play().catch(() => {});
-  }
-
-  if (audio.src && !musicStopped) {
-    audio.play().catch(() => {});
-  }
+  scheduleCurrent();
 }
 
 function toggleSlideshow() {
@@ -358,17 +462,7 @@ function toggleFullscreen() {
 }
 
 function toggleMute() {
-  videoMuted = !videoMuted;
-
-  const video = stage.querySelector("video");
-
-  if (video) {
-    video.muted = videoMuted;
-  }
-
-  $("videoMute").textContent = videoMuted
-    ? "🔇 Unmute video"
-    : "🔊 Mute video";
+  setVideoMuted(!videoMuted);
 }
 
 function togglePresentationMode() {
@@ -387,11 +481,7 @@ function toggleShuffle() {
     shuffleEnabled ? "🔀 Shuffle: On" : "🔀 Shuffle: Off";
 }
 
-function updateMusicButton() {
-  $("musicToggle").textContent = musicStopped
-    ? "▶ Play music"
-    : "⏹ Stop music";
-}
+/* ---------- events ---------- */
 
 $("filesInput").addEventListener("change", event => {
   addFiles(event.target.files);
@@ -414,10 +504,10 @@ $("videoMute").addEventListener("click", toggleMute);
 $("presentation").addEventListener("click", togglePresentationMode);
 $("shuffle").addEventListener("click", toggleShuffle);
 
+// Seconds only affects photos; a playing video is never interrupted
 $("seconds").addEventListener("change", () => {
-  if (playing) {
-    stopSlideshow();
-    startSlideshow();
+  if (playing && items[current] && items[current].type === "image") {
+    scheduleCurrent();
   }
 });
 
@@ -439,7 +529,7 @@ $("music").addEventListener("change", event => {
   updateMusicButton();
 
   if (playing) {
-    audio.play().catch(() => {});
+    updateMusic();
   }
 
   event.target.value = "";
@@ -456,14 +546,8 @@ $("musicToggle").addEventListener("click", () => {
   }
 
   musicStopped = !musicStopped;
-
-  if (musicStopped) {
-    audio.pause();
-  } else {
-    audio.play().catch(() => {});
-  }
-
   updateMusicButton();
+  updateMusic();
 });
 
 stage.addEventListener("touchstart", event => {
@@ -471,8 +555,7 @@ stage.addEventListener("touchstart", event => {
 }, { passive: true });
 
 stage.addEventListener("touchend", event => {
-  const touchEndX = event.changedTouches[0].screenX;
-  const distance = touchEndX - touchStartX;
+  const distance = event.changedTouches[0].screenX - touchStartX;
 
   if (Math.abs(distance) < 50) return;
 
