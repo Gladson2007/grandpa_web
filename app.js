@@ -2,10 +2,10 @@
    SETTINGS: fill these in to switch the QR gallery on
    ========================================================= */
 const CONFIG = {
-  SUPABASE_URL: "",        // Project URL, e.g. "https://abcdxyz.supabase.co"
-  SUPABASE_ANON_KEY: "",   // anon public key from Project Settings > API
+  SUPABASE_URL: "https://sjfkcivlokgdncivqszj.supabase.co",        // Project URL, e.g. "https://abcdxyz.supabase.co"
+  SUPABASE_ANON_KEY: "sb_secret_QJw1hmK-qfzAOsq9ruT3iw_4rCdrfSL",   // anon public key from Project Settings > API
   BUCKET: "memories",      // keep this name (same as in the SQL)
-  PUBLIC_SITE_URL: ""      // optional, e.g. "https://grandpa-memories.netlify.app/"
+  PUBLIC_SITE_URL: "https://grandpaweb.vercel.app"      // optional, e.g. "https://grandpa-memories.netlify.app/"
 };
 
 const $ = id => document.getElementById(id);
