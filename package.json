@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "@prisma/orm-postgres": "^8.0.0-rc.23",
+    "@supabase/server": "^1.9.2",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
+    "dotenv": "^18.0.9"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "prisma": "^8.0.0-rc.33"
+  },
+  "scripts": {
+    "postinstall": "prisma skills sync || exit 0"
+  }
+}
