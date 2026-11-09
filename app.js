@@ -3,7 +3,7 @@
    ========================================================= */
 const CONFIG = {
   SUPABASE_URL: "https://sjfkcivlokgdncivqszj.supabase.co",        // Project URL, e.g. "https://abcdxyz.supabase.co"
-  SUPABASE_ANON_KEY: "sb_secret_QJw1hmK-qfzAOsq9ruT3iw_4rCdrfSL",   // anon public key from Project Settings > API
+  SUPABASE_ANON_KEY: "sb_publishable_1qBRjRYvUMCaQ9f5cVCLPw_kHH7_0u1",   // PUBLISHABLE key (starts with sb_publishable_). Never put sb_secret_ here
   BUCKET: "memories",      // keep this name (same as in the SQL)
   PUBLIC_SITE_URL: "https://grandpaweb.vercel.app"      // optional, e.g. "https://grandpa-memories.netlify.app/"
 };
@@ -11,8 +11,11 @@ const CONFIG = {
 const $ = id => document.getElementById(id);
 const IS_GALLERY = new URLSearchParams(location.search).has("gallery");
 
+// A secret / service_role key must never be used in a browser (Supabase blocks it)
+const KEY_IS_SECRET = /^sb_secret_|service_role/i.test(CONFIG.SUPABASE_ANON_KEY);
+
 const sb =
-  CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY && window.supabase
+  !KEY_IS_SECRET && CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY && window.supabase
     ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
     : null;
 
@@ -151,6 +154,7 @@ async function uploadItem(item) {
     }
   } catch (error) {
     console.error(error);
+    item.errorMessage = (error && error.message) || String(error);
     setItemState(item, "failed");
   }
 }
@@ -166,11 +170,12 @@ async function uploadQueue(list) {
     done++;
   }
 
-  const failed = list.filter(item => item.state === "failed").length;
+  const failedItems = list.filter(item => item.state === "failed");
+  const failed = failedItems.length;
 
   setStatus(
     failed
-      ? `${failed} file(s) could not be saved. Click "Not saved" to retry.`
+      ? `${failed} file(s) could not be saved (${failedItems[0].errorMessage || "unknown error"}). Click "Not saved" to retry.`
       : "All memories saved. The QR gallery is up to date."
   );
 
@@ -246,7 +251,7 @@ async function loadSavedMemories() {
     }
   } catch (error) {
     console.error(error);
-    setStatus("Could not load saved memories. Check your Supabase settings.");
+    setStatus(`Could not load saved memories (${(error && error.message) || "unknown error"}). Check your Supabase key and run supabase-setup.sql.`);
   }
 }
 
@@ -291,7 +296,10 @@ function setupQR() {
     ? "Scan to see all memories"
     : "QR not active yet";
 
-  if (!sb) {
+  if (KEY_IS_SECRET) {
+    $("cloudNote").textContent =
+      "Wrong Supabase key: app.js has a SECRET key. Use the PUBLISHABLE key (sb_publishable_...) in CONFIG.SUPABASE_ANON_KEY.";
+  } else if (!sb) {
     $("cloudNote").textContent =
       "The QR gallery is off. Add SUPABASE_URL and SUPABASE_ANON_KEY at the top of app.js, then open this page from your online website link.";
   } else if (!getGalleryUrl()) {
@@ -343,7 +351,24 @@ async function initGallery() {
     galleryItems = await fetchMemories();
   } catch (error) {
     console.error(error);
+
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = "↻ Try again";
+    retry.style.marginTop = "12px";
+    retry.addEventListener("click", initGallery);
+
     status.textContent = "Could not load the memories. Please try again.";
+
+    const detail = document.createElement("small");
+    detail.style.display = "block";
+    detail.style.marginTop = "10px";
+    detail.style.overflowWrap = "anywhere";
+    detail.textContent =
+      `Details: ${(error && error.message) || "unknown error"} (app v3)`;
+
+    status.appendChild(detail);
+    status.appendChild(retry);
     return;
   }
 
