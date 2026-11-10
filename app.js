@@ -51,13 +51,13 @@ let musicUrl = null;
 let touchStartX = 0;
 
 /* =========================================================
-   3D FLIP SETTINGS
+   FADE-THROUGH-BLACK SETTINGS
    ========================================================= */
-// Total time of ONE flip in milliseconds (1000 = 1 second).
-// Bigger number = slower flip.
-// 2400 = old photo turns away for 1.2 s, then the new one turns in for 1.2 s.
-// Try 3000 for even slower, 1800 for a little faster.
-const FLIP_DURATION = 2400;
+// Total time of ONE change in milliseconds (1000 = 1 second).
+// 3000 = old photo fades slowly into black (1.5 s),
+//        then the new photo fades slowly out of the black (1.5 s).
+// Try 4000 for even slower, 2200 for a little faster.
+const FLIP_DURATION = 800;
 
 let flipTimer = null;
 let flipUntil = 0;
@@ -663,6 +663,8 @@ function clearFlip() {
 
   stage.querySelectorAll(".flip-out").forEach(node => node.remove());
 
+  stage.querySelectorAll(".fade-black").forEach(node => node.remove());
+
   stage.querySelectorAll(".flip-in").forEach(node => {
     node.classList.remove("flip-in", "flip-prev");
   });
@@ -711,7 +713,7 @@ function scheduleCurrent() {
 /* ---------- Stunning extras: blurred backdrop, slow zoom, dots ---------- */
 
 // A blurred copy of the photo fills the empty sides of the stage
-function updateBackdrop(item, animate) {
+function updateBackdrop(item, animate, intro) {
   const olds = Array.from(stage.querySelectorAll(".stage-bg"));
 
   if (item && item.type === "image") {
@@ -719,10 +721,13 @@ function updateBackdrop(item, animate) {
     bg.className = "stage-bg";
     bg.style.backgroundImage = `url("${item.url.replace(/"/g, "%22")}")`;
     if (animate) bg.classList.add("fade");
+    if (intro) bg.classList.add("intro");
     stage.appendChild(bg);
   }
 
   if (animate) {
+    // old backdrop disappears while the screen is fully black
+    olds.forEach(node => node.classList.add("leaving"));
     setTimeout(() => olds.forEach(node => node.remove()), FLIP_DURATION + 50);
   } else {
     olds.forEach(node => node.remove());
@@ -817,6 +822,15 @@ function render(animate = false, direction = "next") {
 
   const newMedia = createMedia(items[current]);
 
+  // very first photo: glides into the panel
+  const isIntro = !oldMedia && canFlip();
+  if (isIntro) {
+    newMedia.classList.add("intro");
+    newMedia.addEventListener("animationend", () => {
+      newMedia.classList.remove("intro");
+    }, { once: true });
+  }
+
   if (doFlip) {
     newMedia.classList.add("flip-in");
     if (direction === "previous") newMedia.classList.add("flip-prev");
@@ -824,11 +838,16 @@ function render(animate = false, direction = "next") {
     // small extra time so the animation is completely finished
     flipUntil = Date.now() + FLIP_DURATION + 50;
     flipTimer = setTimeout(endFlip, FLIP_DURATION + 50);
+
+    // black veil: screen goes slowly black, then slowly clears
+    const veil = document.createElement("div");
+    veil.className = "fade-black";
+    stage.appendChild(veil);
   }
 
   stage.appendChild(newMedia);
 
-  updateBackdrop(items[current], doFlip);
+  updateBackdrop(items[current], doFlip, isIntro);
   startKenBurns(newMedia, items[current], doFlip);
 
   updateCaption(doFlip);
