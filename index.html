@@ -648,6 +648,180 @@
       .g-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
       .lb-media { padding: 56px 8px 8px; }
     }
+
+    /* =========================================================
+       STUNNING IMAGES (works together with app.js)
+       ========================================================= */
+
+    /* ---- Slideshow frame ---- */
+    #stage {
+      border: 0;
+      border-radius: 24px;
+      box-shadow:
+        0 0 0 6px rgba(255, 255, 255, .9),
+        0 0 0 7px rgba(36, 68, 93, .22),
+        0 34px 80px rgba(22, 36, 59, .38);
+    }
+
+    /* soft light vignette over everything */
+    #stage::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      pointer-events: none;
+      border-radius: inherit;
+      background:
+        radial-gradient(ellipse at center, transparent 65%, rgba(11, 21, 36, .35) 100%),
+        linear-gradient(to top, rgba(11, 21, 36, .35), transparent 30%);
+    }
+
+    #stage img,
+    #stage video {
+      border-radius: 14px;
+      filter: saturate(1.08) contrast(1.04);
+    }
+
+    /* ---- Blurred copy of the photo fills the empty sides ---- */
+    .stage-bg {
+      position: absolute;
+      inset: -60px;
+      z-index: 1;
+      background-size: cover;
+      background-position: center;
+      filter: blur(34px) brightness(.62) saturate(1.35);
+      pointer-events: none;
+    }
+    .stage-bg.fade { animation: bgIn var(--flip-ms) ease both; }
+    @keyframes bgIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* ---- Caption: bottom-left, white, slides up ---- */
+    .caption {
+      right: auto;
+      left: 28px;
+      bottom: 46px;
+      max-width: min(620px, calc(100% - 56px));
+      padding: 14px 22px;
+      text-align: left;
+      border-radius: 14px;
+      border-left: 4px solid #B0E0E6;
+      background: linear-gradient(90deg, rgba(11, 21, 36, .8), rgba(11, 21, 36, .3));
+      text-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+      backdrop-filter: blur(6px);
+      animation: captionUp .7s ease both;
+    }
+    .caption.fade-in { animation: captionUp .9s ease var(--flip-ms) both; }
+    .caption.on-video { bottom: 74px; }
+    @keyframes captionUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---- Dots (like the CSS slideshow demo) ---- */
+    .dots {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      z-index: 6;
+      display: flex;
+      gap: 9px;
+      padding: 6px 12px;
+      border-radius: 99px;
+      background: rgba(11, 21, 36, .35);
+      backdrop-filter: blur(6px);
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+    .dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .5);
+      transition: .4s ease;
+    }
+    .dots span.on {
+      background: #fff;
+      transform: scale(1.4);
+      box-shadow: 0 0 8px rgba(255, 255, 255, .9);
+    }
+
+    .progress { height: 6px; }
+    #progressBar { box-shadow: 0 0 10px rgba(176, 224, 230, .9); }
+
+    /* ---- Guest gallery (QR page) ---- */
+    .g-grid { gap: 14px; }
+
+    .tile {
+      border-radius: 18px;
+      box-shadow: 0 8px 22px rgba(22, 36, 59, .25);
+      opacity: 0;
+      animation: tileIn .7s ease forwards;
+      transition: transform .35s ease, box-shadow .35s ease;
+    }
+    .tile:hover {
+      transform: translateY(-6px) scale(1.03);
+      box-shadow: 0 18px 38px rgba(22, 36, 59, .4);
+    }
+    .tile img,
+    .tile video {
+      transition: transform .8s ease, filter .4s ease;
+      filter: saturate(1.08);
+    }
+    .tile:hover img,
+    .tile:hover video {
+      transform: scale(1.14);
+      filter: saturate(1.2) brightness(1.05);
+    }
+    .tile::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(to top, rgba(11, 21, 36, .45), transparent 45%);
+      opacity: .6;
+      transition: opacity .35s ease;
+    }
+    .tile:hover::after { opacity: .15; }
+    .play-badge { z-index: 2; }
+
+    @keyframes tileIn {
+      from { opacity: 0; transform: translateY(26px) scale(.94); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ---- Full-screen viewer ---- */
+    .lb-media img,
+    .lb-media video {
+      border-radius: 14px;
+      box-shadow: 0 0 0 5px rgba(255, 255, 255, .9), 0 30px 80px rgba(0, 0, 0, .6);
+      animation: lbZoom .5s ease both;
+    }
+    @keyframes lbZoom {
+      from { opacity: 0; transform: scale(.9); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    /* ---- Admin thumbnails + headers ---- */
+    .item img,
+    .item video {
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(22, 36, 59, .25);
+    }
+    .hero,
+    .g-hero {
+      border: 1px solid rgba(255, 255, 255, .6);
+      box-shadow: 0 18px 50px rgba(22, 36, 59, .2), inset 0 1px 0 rgba(255, 255, 255, .7);
+    }
+
+    @media (max-width: 700px) {
+      .caption { left: 12px; right: 12px; bottom: 40px; max-width: none; padding: 10px 14px; }
+      .caption.on-video { bottom: 66px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tile { animation: none; opacity: 1; }
+      .caption, .caption.fade-in, .stage-bg.fade { animation: none; }
+    }
   </style>
 </head>
 
@@ -809,6 +983,6 @@
 
   <audio id="audio" loop></audio>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
