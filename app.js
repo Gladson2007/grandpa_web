@@ -2,16 +2,16 @@
    SETTINGS: fill these in to switch the QR gallery on
    ========================================================= */
 const CONFIG = {
-  SUPABASE_URL: "https://sjfkcivlokgdncivqszj.supabase.co",        // Project URL, e.g. "https://abcdxyz.supabase.co"
-  SUPABASE_ANON_KEY: "sb_publishable_1qBRjRYvUMCaQ9f5cVCLPw_kHH7_0u1",   // PUBLISHABLE key (starts with sb_publishable_). Never put sb_secret_ here
-  BUCKET: "memories",      // keep this name (same as in the SQL)
-  PUBLIC_SITE_URL: "https://grandpaweb.vercel.app"      // optional, e.g. "https://grandpa-memories.netlify.app/"
+  SUPABASE_URL: "https://sjfkcivlokgdncivqszj.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_1qBRjRYvUMCaQ9f5cVCLPw_kHH7_0u1",
+  BUCKET: "memories",
+  PUBLIC_SITE_URL: "https://grandpaweb.vercel.app"
 };
 
 const $ = id => document.getElementById(id);
 const IS_GALLERY = new URLSearchParams(location.search).has("gallery");
 
-// A secret / service_role key must never be used in a browser (Supabase blocks it)
+// A secret / service_role key must never be used in a browser
 const KEY_IS_SECRET = /^sb_secret_|service_role/i.test(CONFIG.SUPABASE_ANON_KEY);
 
 const sb =
@@ -49,6 +49,20 @@ let musicStopped = false;
 let shuffleEnabled = false;
 let musicUrl = null;
 let touchStartX = 0;
+
+/* =========================================================
+   3D FLIP SETTINGS
+   ========================================================= */
+// Total time of ONE flip in milliseconds (1000 = 1 second).
+// Bigger number = slower flip.
+// 2400 = old photo turns away for 1.2 s, then the new one turns in for 1.2 s.
+// Try 3000 for even slower, 1800 for a little faster.
+const FLIP_DURATION = 2400;
+
+let flipTimer = null;
+let flipUntil = 0;
+
+stage.style.setProperty("--flip-ms", `${FLIP_DURATION}ms`);
 
 function setStatus(message) {
   $("status").textContent = message;
@@ -254,7 +268,7 @@ async function loadSavedMemories() {
     setStatus(`Could not load saved memories (${(error && error.message) || "unknown error"}). Check your Supabase key and run supabase-setup.sql.`);
   }
 }
-
+     
 /* =========================================================
    QR CODE
    ========================================================= */
@@ -497,8 +511,8 @@ function clearTimers() {
 
 // Photos only: change after "Seconds per photo"
 function startImageTimer() {
-  const startedAt = Date.now();
   const duration = getSeconds() * 1000;
+  const startedAt = Date.now();
 
   progressTimer = setInterval(() => {
     const percent = Math.min(100, (Date.now() - startedAt) / duration * 100);
@@ -615,7 +629,7 @@ function createMedia(item) {
   return element;
 }
 
-function updateCaption() {
+function updateCaption(fade = false) {
   stage.querySelectorAll(".caption").forEach(node => node.remove());
 
   const item = items[current];
@@ -624,29 +638,54 @@ function updateCaption() {
   const caption = document.createElement("div");
   caption.className = item.type === "video" ? "caption on-video" : "caption";
   caption.textContent = item.caption;
+  if (fade) caption.classList.add("fade-in");
   stage.appendChild(caption);
 }
 
-function createPageAnimation(direction) {
-  const oldMedia = stage.querySelector(".current-media");
-  if (!oldMedia) return;
+/* ---------- 3D flip helpers ---------- */
 
-  const oldPage = document.createElement("div");
+// Respect the device setting "reduce motion"
+function canFlip() {
+  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
-  oldPage.className =
-    direction === "previous"
-      ? "memory-page turn-previous"
-      : "memory-page turn-next";
+function isFlipping() {
+  return Date.now() < flipUntil;
+}
 
-  const copy = oldMedia.cloneNode(true);
-  copy.classList.remove("current-media");
-  copy.controls = false;
-  copy.muted = true;
+// Remove everything left over from a flip
+function clearFlip() {
+  clearTimeout(flipTimer);
+  flipTimer = null;
+  flipUntil = 0;
 
-  oldPage.appendChild(copy);
-  stage.appendChild(oldPage);
+  stage.querySelectorAll(".flip-out").forEach(node => node.remove());
 
-  setTimeout(() => oldPage.remove(), 800);
+  stage.querySelectorAll(".flip-in").forEach(node => {
+    node.classList.remove("flip-in", "flip-prev");
+  });
+}
+
+// Flip finished: clean up, then start the photo timer / video
+function endFlip() {
+  clearFlip();
+
+  if (playing) scheduleCurrent();
+}
+
+// The old photo/video stays in place and turns away
+// (it is not copied, so a video keeps its last frame)
+function startFlipOut(media, direction) {
+  media.classList.remove("current-media");
+  media.classList.add("flip-out");
+
+  if (direction === "previous") media.classList.add("flip-prev");
+
+  if (media.tagName === "VIDEO") {
+    media.pause();
+    media.controls = false;
+    media.muted = true;
+  }
 }
 
 function scheduleCurrent() {
@@ -654,20 +693,24 @@ function scheduleCurrent() {
 
   if (!playing || !items.length) return;
 
+  updateMusic();
+
+  // Wait for the flip to finish; endFlip() calls this function again
+  if (isFlipping()) return;
+
   if (items[current].type === "video") {
     const video = getCurrentVideo();
     if (video) playVideo(video);
   } else {
     startImageTimer();
   }
-
-  updateMusic();
 }
 
 function render(animate = false, direction = "next") {
   updateHeader();
 
   if (!items.length) {
+    clearFlip();
     stopSlideshow();
     stage.innerHTML = PLACEHOLDER;
     updateCounter();
@@ -677,20 +720,38 @@ function render(animate = false, direction = "next") {
 
   current = Math.max(0, Math.min(current, items.length - 1));
 
-  if (animate) {
-    createPageAnimation(direction);
-  }
+  clearFlip();
+
+  const oldMedia = stage.querySelector(".current-media");
+  const doFlip = animate && Boolean(oldMedia) && canFlip();
 
   const oldVideo = getCurrentVideo();
   if (oldVideo) oldVideo.pause();
 
   stage
-    .querySelectorAll(".placeholder,.current-media,.caption")
+    .querySelectorAll(".placeholder,.caption")
     .forEach(node => node.remove());
 
-  stage.appendChild(createMedia(items[current]));
+  if (doFlip) {
+    startFlipOut(oldMedia, direction);
+  } else {
+    stage.querySelectorAll(".current-media").forEach(node => node.remove());
+  }
 
-  updateCaption();
+  const newMedia = createMedia(items[current]);
+
+  if (doFlip) {
+    newMedia.classList.add("flip-in");
+    if (direction === "previous") newMedia.classList.add("flip-prev");
+
+    // small extra time so the animation is completely finished
+    flipUntil = Date.now() + FLIP_DURATION + 50;
+    flipTimer = setTimeout(endFlip, FLIP_DURATION + 50);
+  }
+
+  stage.appendChild(newMedia);
+
+  updateCaption(doFlip);
   updateCounter();
   renderMediaList();
 
@@ -781,6 +842,8 @@ function renderMediaList() {
     row.append(thumbnail, filename, caption, badge, up, down, remove);
 
     row.addEventListener("click", () => {
+      if (isFlipping() || index === current) return;
+
       const direction = index > current ? "next" : "previous";
       current = index;
       render(true, direction);
@@ -859,7 +922,7 @@ function moveItem(index, direction) {
    ========================================================= */
 
 function nextSlide() {
-  if (!items.length) return;
+  if (!items.length || isFlipping()) return;
 
   const oldIndex = current;
 
@@ -875,7 +938,7 @@ function nextSlide() {
 }
 
 function previousSlide() {
-  if (!items.length) return;
+  if (!items.length || isFlipping()) return;
 
   current = (current - 1 + items.length) % items.length;
   render(true, "previous");
