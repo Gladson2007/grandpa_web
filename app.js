@@ -94,6 +94,7 @@ function updateCounter() {
 
   counter.textContent = `${current + 1} / ${items.length}`;
   slideName.textContent = items[current].name;
+  updateDots();
 }
 
 /* =========================================================
@@ -408,6 +409,7 @@ function renderGalleryGrid() {
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = "tile";
+    tile.style.animationDelay = `${Math.min(index, 24) * 60}ms`;
     tile.setAttribute("aria-label", row.caption || `Open memory ${index + 1}`);
 
     if (row.type === "video") {
@@ -706,6 +708,81 @@ function scheduleCurrent() {
   }
 }
 
+/* ---------- Stunning extras: blurred backdrop, slow zoom, dots ---------- */
+
+// A blurred copy of the photo fills the empty sides of the stage
+function updateBackdrop(item, animate) {
+  const olds = Array.from(stage.querySelectorAll(".stage-bg"));
+
+  if (item && item.type === "image") {
+    const bg = document.createElement("div");
+    bg.className = "stage-bg";
+    bg.style.backgroundImage = `url("${item.url.replace(/"/g, "%22")}")`;
+    if (animate) bg.classList.add("fade");
+    stage.appendChild(bg);
+  }
+
+  if (animate) {
+    setTimeout(() => olds.forEach(node => node.remove()), FLIP_DURATION + 50);
+  } else {
+    olds.forEach(node => node.remove());
+  }
+}
+
+// Slow zoom on photos (zooms in on one slide, out on the next)
+function startKenBurns(media, item, delayed) {
+  if (item.type !== "image" || !canFlip() || !media.animate) return;
+
+  const zoomIn = current % 2 === 0;
+  const total = Math.max(9000, getSeconds() * 1000 + FLIP_DURATION);
+
+  media.animate(
+    [
+      { scale: zoomIn ? 1 : 1.08 },
+      { scale: zoomIn ? 1.08 : 1 }
+    ],
+    {
+      duration: total,
+      delay: delayed ? FLIP_DURATION / 2 : 0,
+      easing: "ease-in-out",
+      fill: "both"
+    }
+  );
+}
+
+// Little dots at the bottom of the slideshow (up to 12 memories)
+function updateDots() {
+  let dots = stage.querySelector(".dots");
+
+  const show =
+    items.length > 1 &&
+    items.length <= 12 &&
+    items[current] &&
+    items[current].type !== "video";
+
+  if (!show) {
+    if (dots) dots.remove();
+    return;
+  }
+
+  if (!dots || dots.children.length !== items.length) {
+    if (dots) dots.remove();
+
+    dots = document.createElement("div");
+    dots.className = "dots";
+
+    for (let i = 0; i < items.length; i++) {
+      dots.appendChild(document.createElement("span"));
+    }
+
+    stage.appendChild(dots);
+  }
+
+  Array.from(dots.children).forEach((dot, i) => {
+    dot.classList.toggle("on", i === current);
+  });
+}
+
 function render(animate = false, direction = "next") {
   updateHeader();
 
@@ -750,6 +827,9 @@ function render(animate = false, direction = "next") {
   }
 
   stage.appendChild(newMedia);
+
+  updateBackdrop(items[current], doFlip);
+  startKenBurns(newMedia, items[current], doFlip);
 
   updateCaption(doFlip);
   updateCounter();
