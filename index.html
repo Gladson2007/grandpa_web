@@ -151,70 +151,52 @@
     }
 
     /* =====================================================
-       SLOW 3D FLIP between photos / videos
-       Total flip time = --flip-ms. app.js sets it from
-       FLIP_DURATION, so change the speed in app.js only.
-       First half: old slide turns away.
-       Second half: new slide turns in.
+       SLOW FADE THROUGH BLACK between photos / videos
+       Total time = --flip-ms (app.js sets it from FLIP_DURATION,
+       so change the speed in app.js only).
+       First half : old photo fades into black.
+       Middle     : screen is fully black (photos swap here).
+       Second half: new photo fades out of the black.
        ===================================================== */
-    :root { --flip-ms: 2400ms; }
+    :root { --flip-ms: 3000ms; }
 
-    #stage {
-      perspective: 2400px;
-      perspective-origin: center center;
+    /* black veil that covers the whole panel */
+    .fade-black {
+      position: absolute;
+      inset: 0;
+      z-index: 4;
+      border-radius: inherit;
+      background: #000;
+      pointer-events: none;
+      opacity: 0;
+      animation: blackDip var(--flip-ms) ease-in-out both;
+    }
+    @keyframes blackDip {
+      0%   { opacity: 0; }
+      42%  { opacity: 1; }
+      58%  { opacity: 1; }
+      100% { opacity: 0; }
     }
 
-    #stage .flip-out,
-    #stage .flip-in {
-      transform-origin: center center;
-      -webkit-backface-visibility: hidden;
-      backface-visibility: hidden;
-      will-change: transform, filter, opacity;
-    }
-
-    /* old slide: stays in place and turns away */
+    /* old photo: stays until the screen is black, then is gone */
     #stage .flip-out {
       position: absolute;
       inset: 0;
       z-index: 3;
       pointer-events: none;
-      animation: flipOutNext calc(var(--flip-ms) / 2) ease-in both;
+      animation: goneAtHalf var(--flip-ms) linear both;
     }
-    #stage .flip-out.flip-prev { animation-name: flipOutPrev; }
+    /* new photo: hidden until the screen is black, then it is there */
+    #stage .flip-in { animation: arriveAtHalf var(--flip-ms) linear both; }
 
-    /* new slide: waits for the first half, then turns in */
-    #stage .flip-in {
-      animation: flipInNext calc(var(--flip-ms) / 2) ease-out calc(var(--flip-ms) / 2) both;
+    @keyframes goneAtHalf {
+      0%, 49.9% { opacity: 1; }
+      50%, 100% { opacity: 0; }
     }
-    #stage .flip-in.flip-prev { animation-name: flipInPrev; }
-
-    @keyframes flipOutNext {
-      from { transform: rotateY(0deg) scale(1);   filter: brightness(1);   opacity: 1; }
-      85%  { opacity: 1; }
-      to   { transform: rotateY(90deg) scale(.66); filter: brightness(.55); opacity: 0; }
+    @keyframes arriveAtHalf {
+      0%, 49.9% { opacity: 0; }
+      50%, 100% { opacity: 1; }
     }
-
-    @keyframes flipOutPrev {
-      from { transform: rotateY(0deg) scale(1);    filter: brightness(1);   opacity: 1; }
-      85%  { opacity: 1; }
-      to   { transform: rotateY(-90deg) scale(.66); filter: brightness(.55); opacity: 0; }
-    }
-
-    @keyframes flipInNext {
-      from { transform: rotateY(-90deg) scale(.66); filter: brightness(.55); opacity: 0; }
-      15%  { opacity: 1; }
-      to   { transform: rotateY(0deg) scale(1);     filter: brightness(1);   opacity: 1; }
-    }
-
-    @keyframes flipInPrev {
-      from { transform: rotateY(90deg) scale(.66); filter: brightness(.55); opacity: 0; }
-      15%  { opacity: 1; }
-      to   { transform: rotateY(0deg) scale(1);    filter: brightness(1);   opacity: 1; }
-    }
-
-    /* caption appears after the flip has finished */
-    .caption.fade-in { animation: captionFade .8s ease var(--flip-ms) both; }
-    @keyframes captionFade { from { opacity: 0; } to { opacity: 1; } }
 
     .placeholder {
       color: #2b4468;
@@ -692,8 +674,9 @@
       filter: blur(34px) brightness(.62) saturate(1.35);
       pointer-events: none;
     }
-    .stage-bg.fade { animation: bgIn var(--flip-ms) ease both; }
-    @keyframes bgIn { from { opacity: 0; } to { opacity: 1; } }
+    .stage-bg.fade    { animation: arriveAtHalf var(--flip-ms) linear both; }
+    .stage-bg.leaving { animation: goneAtHalf   var(--flip-ms) linear both; }
+    .stage-bg.intro   { animation: fadeFromBlack 2.4s ease both; }
 
     /* ---- Caption: bottom-left, white, slides up ---- */
     .caption {
@@ -710,7 +693,7 @@
       backdrop-filter: blur(6px);
       animation: captionUp .7s ease both;
     }
-    .caption.fade-in { animation: captionUp .9s ease var(--flip-ms) both; }
+    .caption.fade-in { animation: captionUp 1.2s ease calc(var(--flip-ms) * .65) both; }
     .caption.on-video { bottom: 74px; }
     @keyframes captionUp {
       from { opacity: 0; transform: translateY(30px); }
@@ -821,6 +804,20 @@
     @media (prefers-reduced-motion: reduce) {
       .tile { animation: none; opacity: 1; }
       .caption, .caption.fade-in, .stage-bg.fade { animation: none; }
+    }
+
+    /* =========================================================
+       FIRST PHOTO: fades slowly out of the black
+       ========================================================= */
+    #stage .current-media.intro { animation: fadeFromBlack 2.4s ease both; }
+    @keyframes fadeFromBlack {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #stage .current-media.intro,
+      .stage-bg.intro { animation: none; }
     }
   </style>
 </head>
@@ -983,6 +980,6 @@
 
   <audio id="audio" loop></audio>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
