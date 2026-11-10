@@ -21,13 +21,11 @@
       --gold: #24445D;
       --stage: #0b1524;
       --shadow: 0 18px 50px rgba(22, 36, 59, .16);
-      /* floral background for the photo / video screen */
       --stage-bg: #ffffff url("floral-bg.png") center / cover no-repeat;
     }
 
     * { box-sizing: border-box; }
     [hidden] { display: none !important; }
-
     html { scroll-behavior: smooth; background: var(--paper); }
 
     body {
@@ -44,7 +42,6 @@
 
     main { width: min(1500px, 100%); margin: auto; padding: 14px 20px 50px; }
 
-    /* ---------- heading ---------- */
     .hero {
       display: flex;
       align-items: center;
@@ -82,7 +79,6 @@
       font-size: clamp(15px, 1.8vw, 20px);
     }
 
-    /* ---------- small QR code ---------- */
     .qr-card,
     .qr-card:hover {
       display: flex;
@@ -110,7 +106,6 @@
       text-align: center;
     }
 
-    /* ---------- panels ---------- */
     .panel {
       margin-bottom: 22px;
       padding: clamp(18px, 3vw, 30px);
@@ -121,12 +116,9 @@
     }
 
     body.presentation-mode .panel { background: #B7D2E8; border-color: #B0E0E6; }
-
     .slideshow-panel { padding: 14px; }
-
     .stage-wrap { position: relative; width: 100%; }
 
-    /* ---------- BIG video / photo screen ---------- */
     #stage {
       position: relative;
       display: flex;
@@ -139,12 +131,11 @@
       background: var(--stage-bg);
       border: 1px solid var(--line);
       box-shadow: 0 22px 60px rgba(22, 36, 59, .18);
-      perspective: 1800px;
+      perspective: 2400px;
       touch-action: pan-y;
     }
 
     body.presentation-mode #stage { height: clamp(420px, calc(100svh - 250px), 1300px); }
-
     #stage:fullscreen { height: 100vh; border-radius: 0; }
     #stage:-webkit-full-screen { height: 100vh; border-radius: 0; }
 
@@ -159,38 +150,77 @@
       user-select: none;
     }
 
-    .placeholder { color: #2b4468; font-style: italic; text-align: center; padding: 20px; }
+    /* =====================================================
+       SLOW 3D FLIP between photos / videos
+       Total flip time = --flip-ms. app.js sets it from
+       FLIP_DURATION, so change the speed in app.js only.
+       First half: old slide turns away.
+       Second half: new slide turns in.
+       ===================================================== */
+    :root { --flip-ms: 2400ms; }
 
-    .memory-page {
+    #stage {
+      perspective: 2400px;
+      perspective-origin: center center;
+    }
+
+    #stage .flip-out,
+    #stage .flip-in {
+      transform-origin: center center;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      will-change: transform, filter, opacity;
+    }
+
+    /* old slide: stays in place and turns away */
+    #stage .flip-out {
       position: absolute;
       inset: 0;
       z-index: 3;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--stage-bg);
-      transform-origin: left center;
-      backface-visibility: hidden;
       pointer-events: none;
+      animation: flipOutNext calc(var(--flip-ms) / 2) ease-in both;
+    }
+    #stage .flip-out.flip-prev { animation-name: flipOutPrev; }
+
+    /* new slide: waits for the first half, then turns in */
+    #stage .flip-in {
+      animation: flipInNext calc(var(--flip-ms) / 2) ease-out calc(var(--flip-ms) / 2) both;
+    }
+    #stage .flip-in.flip-prev { animation-name: flipInPrev; }
+
+    @keyframes flipOutNext {
+      from { transform: rotateY(0deg) scale(1);   filter: brightness(1);   opacity: 1; }
+      85%  { opacity: 1; }
+      to   { transform: rotateY(90deg) scale(.66); filter: brightness(.55); opacity: 0; }
     }
 
-    .memory-page.turn-next { animation: pageTurnNext .72s ease both; }
-
-    .memory-page.turn-previous {
-      transform-origin: right center;
-      animation: pageTurnPrevious .72s ease both;
+    @keyframes flipOutPrev {
+      from { transform: rotateY(0deg) scale(1);    filter: brightness(1);   opacity: 1; }
+      85%  { opacity: 1; }
+      to   { transform: rotateY(-90deg) scale(.66); filter: brightness(.55); opacity: 0; }
     }
 
-    @keyframes pageTurnNext {
-      0% { transform: rotateY(0); box-shadow: none; }
-      45% { transform: rotateY(-88deg); box-shadow: 18px 0 25px rgba(0,0,0,.35); }
-      100% { transform: rotateY(-180deg); opacity: 0; }
+    @keyframes flipInNext {
+      from { transform: rotateY(-90deg) scale(.66); filter: brightness(.55); opacity: 0; }
+      15%  { opacity: 1; }
+      to   { transform: rotateY(0deg) scale(1);     filter: brightness(1);   opacity: 1; }
     }
 
-    @keyframes pageTurnPrevious {
-      0% { transform: rotateY(0); opacity: 1; }
-      45% { transform: rotateY(88deg); box-shadow: -18px 0 25px rgba(0,0,0,.35); }
-      100% { transform: rotateY(180deg); opacity: 0; }
+    @keyframes flipInPrev {
+      from { transform: rotateY(90deg) scale(.66); filter: brightness(.55); opacity: 0; }
+      15%  { opacity: 1; }
+      to   { transform: rotateY(0deg) scale(1);    filter: brightness(1);   opacity: 1; }
+    }
+
+    /* caption appears after the flip has finished */
+    .caption.fade-in { animation: captionFade .8s ease var(--flip-ms) both; }
+    @keyframes captionFade { from { opacity: 0; } to { opacity: 1; } }
+
+    .placeholder {
+      color: #2b4468;
+      font-style: italic;
+      text-align: center;
+      padding: 20px;
     }
 
     .caption {
@@ -210,7 +240,13 @@
 
     .caption.on-video { bottom: 70px; }
 
-    .progress { height: 5px; overflow: hidden; margin: 12px 4px 0; border-radius: 99px; background: #c4d1de; }
+    .progress {
+      height: 5px;
+      overflow: hidden;
+      margin: 12px 4px 0;
+      border-radius: 99px;
+      background: #c4d1de;
+    }
 
     #progressBar {
       width: 0%;
@@ -253,7 +289,10 @@
     }
 
     button:hover,
-    .file-button:hover { background: var(--accent-dark); transform: translateY(-2px); }
+    .file-button:hover {
+      background: var(--accent-dark);
+      transform: translateY(-2px);
+    }
 
     button.secondary {
       color: var(--ink);
@@ -262,12 +301,25 @@
       box-shadow: none;
     }
 
-    body.presentation-mode button.secondary { color: #fff; border-color: #5fc8d6; }
+    body.presentation-mode button.secondary {
+      color: #fff;
+      border-color: #5fc8d6;
+    }
 
-    .shortcut-note { margin: 12px 0 0; color: var(--muted); font: 12px system-ui, sans-serif; text-align: center; }
+    .shortcut-note {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font: 12px system-ui, sans-serif;
+      text-align: center;
+    }
 
-    /* ---------- admin panels ---------- */
-    .section-heading { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+    /* Admin panels */
+    .section-heading {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
 
     .section-number {
       display: grid;
@@ -281,17 +333,42 @@
       font-weight: 700;
     }
 
-    h2 { margin: 0; font-size: 21px; font-weight: 500; }
-    .section-heading p { margin: 5px 0 0; color: var(--muted); font-size: 14px; }
+    h2 {
+      margin: 0;
+      font-size: 21px;
+      font-weight: 500;
+    }
 
-    .cloud-note { margin: 0 0 14px; color: var(--muted); font: 13px/1.5 system-ui, sans-serif; }
+    .section-heading p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
 
-    .upload-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .cloud-note {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font: 13px/1.5 system-ui, sans-serif;
+    }
+
+    .upload-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
     .file-button input { display: none; }
 
-    .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .settings {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
 
-    label { font-weight: 700; font-size: 14px; }
+    label {
+      font-weight: 700;
+      font-size: 14px;
+    }
 
     input[type="text"],
     input[type="number"] {
@@ -303,7 +380,10 @@
       font: 15px Georgia, serif;
     }
 
-    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
 
     #mediaList { margin-top: 16px; }
 
@@ -323,9 +403,21 @@
     .item.active { border: 2px solid var(--accent); }
 
     .item img,
-    .item video { width: 76px; height: 55px; object-fit: cover; border-radius: 9px; background: #a8bdd1; }
+    .item video {
+      width: 76px;
+      height: 55px;
+      object-fit: cover;
+      border-radius: 9px;
+      background: #a8bdd1;
+    }
 
-    .filename { flex: 1; min-width: 130px; overflow-wrap: anywhere; font: 14px system-ui, sans-serif; color: var(--ink); }
+    .filename {
+      flex: 1;
+      min-width: 130px;
+      overflow-wrap: anywhere;
+      font: 14px system-ui, sans-serif;
+      color: var(--ink);
+    }
 
     .item input {
       flex: 1 1 160px;
@@ -341,59 +433,86 @@
       border-radius: 99px;
       background: #fff;
       color: var(--muted);
-      font: 700 11px system-ui, sans-serif;
-      white-space: nowrap;
+      font: 11px system-ui, sans-serif;
     }
 
-    .badge.saved { color: #25724a; border-color: #a9d8bf; }
-    .badge.failed { color: #b81810; border-color: #f0b4b0; cursor: pointer; }
-
-    #status { min-height: 24px; margin-top: 12px; color: var(--muted); font: 14px system-ui, sans-serif; text-align: center; }
-
-    .credit { margin-top: 6px; color: var(--muted); font: 12px system-ui, sans-serif; letter-spacing: .06em; text-align: center; }
-    .credit strong { color: var(--ink); letter-spacing: .14em; }
-
-    /* ---------- guest gallery (opened by QR code) ---------- */
-    #galleryView { display: none; max-width: 1200px; margin: auto; padding: 14px 14px 40px; }
-    body.gallery-mode #galleryView { display: block; }
-    body.gallery-mode #presenterView { display: none; }
-
-    .g-hero {
-      padding: 26px clamp(18px, 4vw, 40px);
-      margin-bottom: 16px;
-      border-radius: 20px;
-      color: #fff;
-      background: linear-gradient(120deg, #324e75, #B0E0E6);
-      box-shadow: var(--shadow);
+    .empty-state {
+      padding: 24px;
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      color: var(--muted);
       text-align: center;
     }
 
-    .g-hero .dedication { margin-left: auto; margin-right: auto; }
-    .g-count { margin: 12px 0 0; color: var(--gold); font: 700 12px system-ui, sans-serif; letter-spacing: .1em; }
+    .credit {
+      padding: 20px;
+      color: var(--muted);
+      font: 12px system-ui, sans-serif;
+      text-align: center;
+    }
 
-    .g-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    /* =====================================================
+       GUEST GALLERY (page opened from the QR code)
+       ===================================================== */
+    #galleryView { display: none; }
+    body.gallery-mode #presenterView { display: none; }
+    body.gallery-mode #galleryView {
+      display: block;
+      width: min(1200px, 100%);
+      margin: auto;
+      padding: 14px 16px 50px;
+    }
 
-    .tile,
-    .tile:hover {
+    .g-hero {
+      margin-bottom: 18px;
+      padding: 22px clamp(18px, 4vw, 40px);
+      border-radius: 20px;
+      text-align: center;
+      background: linear-gradient(120deg, #B7D2E8, #B0E0E6);
+      box-shadow: var(--shadow);
+    }
+
+    .g-hero h1 { font-size: clamp(28px, 6vw, 48px); }
+    .g-hero .dedication { margin: 8px auto 0; }
+
+    .g-count {
+      margin: 12px 0 0;
+      color: var(--gold);
+      font: 700 12px system-ui, sans-serif;
+      letter-spacing: .14em;
+    }
+
+    .g-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
+
+    .tile {
       position: relative;
       display: block;
-      width: 100%;
       min-height: 0;
       padding: 0;
       overflow: hidden;
       aspect-ratio: 1;
       border-radius: 12px;
-      background: #cfd9e5;
-      box-shadow: none;
-      transform: none;
+      background: #a8bdd1;
+      box-shadow: 0 4px 12px rgba(22, 36, 59, .18);
     }
 
+    .tile:hover { background: #a8bdd1; transform: scale(1.02); }
+
     .tile img,
-    .tile video { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+    .tile video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
 
     .play-badge {
       position: absolute;
-      left: 8px;
+      right: 8px;
       bottom: 8px;
       display: grid;
       place-items: center;
@@ -401,69 +520,125 @@
       height: 30px;
       border-radius: 50%;
       color: #fff;
-      background: rgba(11, 21, 36, .65);
-      font-size: 12px;
+      background: rgba(11, 21, 36, .7);
+      font-size: 13px;
     }
 
-    .g-status { padding: 20px; color: var(--muted); font: 15px system-ui, sans-serif; text-align: center; }
+    .g-status {
+      margin: 24px 0;
+      color: var(--muted);
+      font: 15px system-ui, sans-serif;
+      text-align: center;
+    }
 
-    .g-credit { margin-top: 34px; padding-top: 22px; border-top: 1px solid var(--line); text-align: center; }
-    .g-credit span { display: block; color: var(--muted); font: 12px system-ui, sans-serif; letter-spacing: .08em; }
-    .g-credit strong { display: block; margin-top: 6px; color: var(--ink); font: 400 22px Georgia, serif; letter-spacing: .2em; }
+    .g-credit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 28px 0 8px;
+      color: var(--muted);
+      font: 12px system-ui, sans-serif;
+      text-align: center;
+    }
 
-    /* ---------- pop-ups ---------- */
+    .g-credit strong { color: var(--ink); letter-spacing: .08em; }
+
+    /* QR pop-up + photo viewer */
     .modal {
       position: fixed;
       inset: 0;
-      z-index: 50;
-      display: grid;
-      place-items: center;
-      align-content: center;
-      padding: 16px;
-      background: rgba(8, 14, 24, .88);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(11, 21, 36, .82);
     }
 
     .qr-modal-card {
-      padding: 22px;
-      border-radius: 20px;
+      padding: 24px;
+      border-radius: 18px;
       color: var(--ink);
       background: #fff;
       text-align: center;
-      box-shadow: 0 30px 80px rgba(0, 0, 0, .5);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, .4);
     }
 
-    .qr-big { display: inline-block; line-height: 0; }
-    .qr-modal-card p { margin: 12px 0 0; font: 700 15px system-ui, sans-serif; }
-    .qr-modal-card small { display: block; max-width: 320px; margin-top: 4px; color: var(--muted); font: 12px system-ui, sans-serif; overflow-wrap: anywhere; }
+    .qr-big { display: block; width: 300px; max-width: 100%; margin: auto; line-height: 0; }
+    .qr-modal-card p { margin: 14px 0 4px; font-size: 18px; }
 
-    .lb-media { display: flex; align-items: center; justify-content: center; width: 100%; height: calc(100svh - 110px); }
+    .qr-modal-card small {
+      display: block;
+      max-width: 320px;
+      color: var(--muted);
+      font: 12px system-ui, sans-serif;
+      overflow-wrap: anywhere;
+    }
+
+    .lightbox {
+      flex-direction: column;
+      padding: 0;
+      background: rgba(5, 10, 18, .94);
+    }
+
+    .lb-media {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 0;
+      padding: 56px 56px 8px;
+    }
+
     .lb-media img,
-    .lb-media video { max-width: 100%; max-height: 100%; border-radius: 10px; background: #000; }
-    .lb-bar { color: #fff; text-align: center; font: 15px system-ui, sans-serif; }
-    .lb-bar small { display: block; margin-top: 4px; color: #9fb2c9; }
+    .lb-media video {
+      max-width: 100%;
+      max-height: calc(100svh - 150px);
+      object-fit: contain;
+      border-radius: 8px;
+    }
 
-    .lb-btn,
-    .lb-btn:hover {
-      position: fixed;
-      z-index: 51;
-      width: 44px;
-      height: 44px;
+    .lb-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      padding: 12px 20px 18px;
+      color: #fff;
+      font: 15px Georgia, serif;
+    }
+
+    .lb-bar small { font: 700 12px system-ui, sans-serif; opacity: .8; }
+
+    .lb-btn {
+      position: absolute;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      width: 46px;
+      height: 46px;
       min-height: 0;
       padding: 0;
       border-radius: 50%;
-      background: rgba(255, 255, 255, .18);
+      color: #fff;
+      background: rgba(255, 255, 255, .16);
       box-shadow: none;
-      transform: none;
-      font-size: 20px;
+      font-size: 24px;
+      line-height: 1;
     }
 
+    .lb-btn:hover { background: rgba(255, 255, 255, .3); transform: none; }
     .lb-close { top: 14px; right: 14px; }
-    .lb-prev { left: 12px; top: 50%; }
-    .lb-next { right: 12px; top: 50%; }
+    .lb-prev { top: 50%; left: 12px; margin-top: -23px; }
+    .lb-next { top: 50%; right: 12px; margin-top: -23px; }
 
+    /* Phones */
     @media (max-width: 700px) {
       main { padding: 10px 10px 40px; }
-      .hero { gap: 12px; }
+      .hero { align-items: flex-start; gap: 12px; }
       .qr-code { width: 84px; height: 84px; }
       #stage { height: clamp(300px, 58svh, 700px); }
       .settings { grid-template-columns: 1fr; }
@@ -471,12 +646,13 @@
       .caption.on-video { bottom: 62px; }
       .controls button { flex: 1 1 auto; }
       .g-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+      .lb-media { padding: 56px 8px 8px; }
     }
   </style>
 </head>
 
 <body>
-  <!-- ===== MAIN PAGE (ceremony screen) ===== -->
+  <!-- MAIN PAGE -->
   <main id="presenterView">
     <header class="hero">
       <div>
@@ -496,9 +672,7 @@
         <div id="stage" tabindex="0">
           <div class="placeholder">Add photos or videos to start the slideshow</div>
         </div>
-
         <div class="progress"><div id="progressBar"></div></div>
-
         <div class="slide-info">
           <span id="counter">0 / 0</span>
           <span id="slideName">No memory selected</span>
@@ -591,10 +765,10 @@
       <div id="status" role="status"></div>
     </section>
 
-    <footer class="credit">Website made with love by <strong>GLADSON C ANTO</strong></footer>
+    <footer class="credit">Website made with <strong>GLADSON C ANTO</strong></footer>
   </main>
 
-  <!-- ===== GUEST GALLERY (opened when the QR code is scanned) ===== -->
+  <!-- GUEST GALLERY -->
   <section id="galleryView" aria-label="Memories gallery">
     <header class="g-hero">
       <p class="eyebrow">41st Ceremony · 19th November</p>
@@ -612,7 +786,7 @@
     </footer>
   </section>
 
-  <!-- ===== BIG QR POP-UP ===== -->
+  <!-- QR POP-UP -->
   <div id="qrModal" class="modal" hidden>
     <div class="qr-modal-card">
       <span id="qrBig" class="qr-big"></span>
@@ -621,7 +795,7 @@
     </div>
   </div>
 
-  <!-- ===== PHOTO / VIDEO VIEWER (gallery) ===== -->
+  <!-- PHOTO / VIDEO VIEWER -->
   <div id="lightbox" class="modal lightbox" hidden>
     <button id="lbClose" class="lb-btn lb-close" aria-label="Close">✕</button>
     <button id="lbPrev" class="lb-btn lb-prev" aria-label="Previous">‹</button>
@@ -635,6 +809,6 @@
 
   <audio id="audio" loop></audio>
 
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
