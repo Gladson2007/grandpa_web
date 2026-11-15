@@ -46,7 +46,6 @@ let progressTimer = null;
 let playing = false;
 let videoMuted = false;
 let musicStopped = false;
-let shuffleEnabled = false;
 let musicUrl = null;
 let touchStartX = 0;
 
@@ -953,15 +952,9 @@ function moveItem(index, direction) {
 function nextSlide() {
   if (!items.length || isFlipping()) return;
 
-  const oldIndex = current;
-
-  if (shuffleEnabled && items.length > 1) {
-    do {
-      current = Math.floor(Math.random() * items.length);
-    } while (current === oldIndex);
-  } else {
-    current = (current + 1) % items.length;
-  }
+  // The list is already in (shuffled) order, so every photo/video plays
+  // exactly once, and after the last one it starts again from the 1st.
+  current = (current + 1) % items.length;
 
   render(true, "next");
 }
@@ -1030,11 +1023,111 @@ function togglePresentationMode() {
       : "◐ Presentation mode";
 }
 
-function toggleShuffle() {
-  shuffleEnabled = !shuffleEnabled;
+/* =========================================================
+   SHUFFLE
+   - mixes photos and videos together
+   - photos are spread between videos (same type is kept apart)
+   - every item appears exactly once (no duplicates)
+   - nothing comes again until the whole list has been shown;
+     after the last one the slideshow starts again from the 1st
+   - pressing the button again makes a brand new shuffle
+   ========================================================= */
 
-  $("shuffle").textContent =
-    shuffleEnabled ? "🔀 Shuffle: On" : "🔀 Shuffle: Off";
+// Fisher–Yates: a true random order, each item used exactly once
+function shuffleArray(list) {
+  const copy = list.slice();
+
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+
+  return copy;
+}
+
+// Shuffle photos and videos separately, then spread the smaller group
+// (usually videos) evenly between the bigger group so that two photos or
+// two videos only touch when there is no other choice.
+function buildMixedOrder() {
+  const photos = shuffleArray(items.filter(item => item.type !== "video"));
+  const videos = shuffleArray(items.filter(item => item.type === "video"));
+
+  const major = photos.length >= videos.length ? photos : videos;
+  const minor = major === photos ? videos : photos;
+
+  if (!minor.length) return major; // only one kind of file
+
+  // minor items sit between "gaps" of major items
+  const gapCount = minor.length + 1;
+  const sizes = new Array(gapCount).fill(0);
+  let left = major.length;
+
+  // 1) every gap between two minor items gets one, so they never touch
+  for (let g = 1; g < gapCount - 1 && left > 0; g++) {
+    sizes[g] = 1;
+    left--;
+  }
+
+  // 2) share the rest evenly over all gaps; leftovers go to random gaps
+  const base = Math.floor(left / gapCount);
+  for (let g = 0; g < gapCount; g++) sizes[g] += base;
+
+  const extra = left - base * gapCount;
+  const randomGaps = shuffleArray([...Array(gapCount).keys()]);
+  for (let k = 0; k < extra; k++) sizes[randomGaps[k]]++;
+
+  // 3) build the final order
+  const mixed = [];
+  let used = 0;
+
+  for (let g = 0; g < gapCount; g++) {
+    for (let k = 0; k < sizes[g]; k++) mixed.push(major[used++]);
+    if (g < minor.length) mixed.push(minor[g]);
+  }
+
+  return mixed;
+}
+
+function sameOrder(a, b) {
+  return a.length === b.length && a.every((item, i) => item === b[i]);
+}
+
+// Re-orders the real list, so the counter, the list on the page and the
+// slideshow all follow the new order. Nothing is added or copied.
+function shuffleItems() {
+  const before = items.slice();
+  let mixed = buildMixedOrder();
+
+  // pressing Shuffle again must give a different order
+  for (let tries = 0; tries < 10 && items.length > 2 && sameOrder(mixed, before); tries++) {
+    mixed = buildMixedOrder();
+  }
+
+  items.splice(0, items.length, ...mixed);
+}
+
+// Shuffle button: shuffle everything, go to the 1st slide, and play
+function shuffleAndPlay() {
+  if (!items.length) {
+    setStatus("Add at least one photo or video to shuffle.");
+    return;
+  }
+
+  const canShuffle = items.length > 1;
+
+  if (canShuffle) shuffleItems();
+
+  current = 0;
+  render(canShuffle, "next");
+
+  // if the slideshow is already playing, render() has restarted it
+  if (!playing) startSlideshow();
+
+  setStatus(
+    canShuffle
+      ? `Shuffled ${items.length} memories. Each one plays once, then it starts again from the 1st.`
+      : ""
+  );
 }
 
 /* =========================================================
@@ -1060,7 +1153,7 @@ $("play").addEventListener("click", toggleSlideshow);
 $("fullscreen").addEventListener("click", toggleFullscreen);
 $("videoMute").addEventListener("click", toggleMute);
 $("presentation").addEventListener("click", togglePresentationMode);
-$("shuffle").addEventListener("click", toggleShuffle);
+$("shuffle").addEventListener("click", shuffleAndPlay);
 
 // Seconds only affects photos; a playing video is never interrupted
 $("seconds").addEventListener("change", () => {
