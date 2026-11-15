@@ -34,7 +34,7 @@ const BADGES = {
   pending: "Waiting…",
   uploading: "Saving…",
   saved: "☁ Saved to QR gallery",
-  failed: "⚠ Not saved · Retry"
+  
 };
 
 // each item: { id, name, url, type, caption, file, path, state, badgeEl }
