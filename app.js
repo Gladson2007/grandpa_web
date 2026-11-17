@@ -14,10 +14,22 @@ const IS_GALLERY = new URLSearchParams(location.search).has("gallery");
 // A secret / service_role key must never be used in a browser
 const KEY_IS_SECRET = /^sb_secret_|service_role/i.test(CONFIG.SUPABASE_ANON_KEY);
 
-const sb =
-  !KEY_IS_SECRET && CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY && window.supabase
-    ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
-    : null;
+let sb = null;
+
+// Creates the cloud client when the library is available (also works if the
+// internet comes back later). Returns null when the cloud cannot be used.
+function ensureCloud() {
+  if (sb) return sb;
+
+  if (KEY_IS_SECRET || !CONFIG.SUPABASE_URL || !CONFIG.SUPABASE_ANON_KEY || !window.supabase) {
+    return null;
+  }
+
+  sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  return sb;
+}
+
+ensureCloud();
 
 const stage = $("stage");
 const mediaList = $("mediaList");
@@ -30,11 +42,11 @@ const PLACEHOLDER =
   '<div class="placeholder">Add photos or videos to start the slideshow</div>';
 
 const BADGES = {
-  local: "On this device only",
-  pending: "Waiting…",
-  uploading: "Saving…",
-  saved: "☁ Saved to QR gallery",
-  
+  local: "Saved on this device",
+  pending: "Saved · waiting for internet",
+  uploading: "Saved · sending to gallery…",
+  saved: "Saved · ☁ in QR gallery",
+  failed: "Saved · ⚠ gallery failed – click to retry"
 };
 
 // each item: { id, name, url, type, caption, file, path, state, badgeEl }
@@ -97,11 +109,172 @@ function updateCounter() {
 }
 
 /* =========================================================
-   CLOUD (Supabase): makes the QR gallery work
+   DEVICE STORAGE (IndexedDB)
+   Photos and videos are kept inside this browser, so they are still
+   here after the site is closed, with or without internet.
+   They are removed only by "Remove" or "Remove all".
+   ========================================================= */
+
+let dbOk = false;
+let dbPromise = null;
+
+function openDB() {
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("This browser cannot store files"));
+        return;
+      }
+
+      const request = indexedDB.open("grandpa-memories", 1);
+
+      request.onupgradeneeded = () => {
+        ["meta", "blobs", "deletes"].forEach(name => {
+          if (!request.result.objectStoreNames.contains(name)) {
+            request.result.createObjectStore(name, { keyPath: "key" });
+          }
+        });
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  return dbPromise;
+}
+
+// Runs several writes in ONE transaction (all saved, or none)
+async function dbRun(stores, work) {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(stores, "readwrite");
+    work(name => tx.objectStore(name));
+    tx.oncomplete = () => resolve();
+    tx.onerror = tx.onabort = () =>
+      reject(tx.error || new Error("Could not save on this device"));
+  });
+}
+
+async function dbGetAll(store) {
+  const db = await openDB();
+
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(store).objectStore(store).getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+// The small info (name, caption, order…) is stored apart from the big file,
+// so changing a caption or the order never rewrites a whole video.
+function metaOf(item, order) {
+  return {
+    key: item.key,
+    name: item.name,
+    type: item.type,
+    caption: item.caption,
+    order,
+    cloudId: item.cloudId,
+    cloudPath: item.cloudPath
+  };
+}
+
+function makeItem(blob, name, type, extra = {}) {
+  return {
+    key: (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name,
+    type,
+    caption: "",
+    blob,
+    url: URL.createObjectURL(blob),
+    cloudId: null,
+    cloudPath: null,
+    cloudPos: null,
+    state: ensureCloud() ? "pending" : "local",
+    ...extra
+  };
+}
+
+async function saveNewItem(item) {
+  if (!dbOk) return;
+
+  await dbRun(["meta", "blobs"], store => {
+    store("blobs").put({ key: item.key, blob: item.blob });
+    store("meta").put(metaOf(item, items.length));
+  });
+}
+
+function saveOrderLocal() {
+  if (!dbOk) return;
+
+  dbRun(["meta"], store => {
+    items.forEach((item, index) => store("meta").put(metaOf(item, index)));
+  }).catch(console.error);
+}
+
+const dirtyMeta = new Set();
+let metaTimer = null;
+
+function scheduleMetaSave(item) {
+  dirtyMeta.add(item);
+  clearTimeout(metaTimer);
+  metaTimer = setTimeout(flushMeta, 300);
+}
+
+function flushMeta() {
+  clearTimeout(metaTimer);
+
+  const list = [...dirtyMeta].filter(item => items.includes(item));
+  dirtyMeta.clear();
+
+  if (!dbOk || !list.length) return;
+
+  dbRun(["meta"], store => {
+    list.forEach(item => store("meta").put(metaOf(item, items.indexOf(item))));
+  }).catch(console.error);
+}
+
+async function loadFromDevice() {
+  const [metas, blobs] = await Promise.all([dbGetAll("meta"), dbGetAll("blobs")]);
+  const blobOf = new Map(blobs.map(entry => [entry.key, entry.blob]));
+
+  metas
+    .sort((a, b) => a.order - b.order)
+    .forEach(meta => {
+      const blob = blobOf.get(meta.key);
+      if (!blob) return;
+
+      items.push({
+        key: meta.key,
+        name: meta.name,
+        type: meta.type,
+        caption: meta.caption || "",
+        blob,
+        url: URL.createObjectURL(blob),
+        cloudId: meta.cloudId || null,
+        cloudPath: meta.cloudPath || null,
+        cloudPos: null,
+        state: meta.cloudId ? "saved" : (ensureCloud() ? "pending" : "local")
+      });
+    });
+}
+
+/* =========================================================
+   CLOUD (Supabase): only for the QR gallery.
+   The slideshow itself NEVER needs internet: it always plays the
+   copy saved on this device. The cloud is used in the background,
+   and only once per photo/video.
    ========================================================= */
 
 async function fetchMemories() {
-  const { data, error } = await sb
+  const client = ensureCloud();
+  if (!client) throw new Error("The QR gallery is not connected");
+
+  const { data, error } = await client
     .from("memories")
     .select("*")
     .order("position", { ascending: true })
@@ -124,24 +297,27 @@ async function uploadItem(item) {
   setItemState(item, "uploading");
 
   try {
+    const client = ensureCloud();
+
     const ext = (item.name.split(".").pop() || "bin")
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "") || "bin";
 
     const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-    const { error } = await sb.storage
+    const { error } = await client.storage
       .from(CONFIG.BUCKET)
-      .upload(path, item.file, {
-        contentType: item.file.type,
+      .upload(path, item.blob, {
+        contentType: item.blob.type,
         cacheControl: "31536000"
       });
 
     if (error) throw error;
 
-    const { data } = sb.storage.from(CONFIG.BUCKET).getPublicUrl(path);
+    const { data } = client.storage.from(CONFIG.BUCKET).getPublicUrl(path);
+    const position = items.indexOf(item);
 
-    const { data: row, error: dbError } = await sb
+    const { data: row, error: dbError } = await client
       .from("memories")
       .insert({
         url: data.publicUrl,
@@ -149,22 +325,23 @@ async function uploadItem(item) {
         type: item.type,
         name: item.name,
         caption: item.caption,
-        position: items.indexOf(item)
+        position
       })
       .select()
       .single();
 
     if (dbError) throw dbError;
 
-    item.id = row.id;
-    item.path = path;
-    item.file = null;
+    item.cloudId = row.id;
+    item.cloudPath = path;
+    item.cloudPos = position;
     setItemState(item, "saved");
 
-    if (!items.includes(item)) {
-      deleteFromCloud(item); // removed while uploading
-    } else {
+    if (items.includes(item)) {
+      scheduleMetaSave(item); // remember on this device that it is uploaded
       syncCaption(item);
+    } else {
+      queueCloudDelete([{ id: row.id, path }]); // removed while uploading
     }
   } catch (error) {
     console.error(error);
@@ -173,102 +350,233 @@ async function uploadItem(item) {
   }
 }
 
-async function uploadQueue(list) {
+async function uploadPending() {
+  const list = items.filter(item => !item.cloudId && item.state === "pending");
+  if (!list.length) return;
+
   let done = 0;
 
   for (const item of list) {
     if (!items.includes(item)) continue;
+    if (!navigator.onLine) break;
 
-    setStatus(`Saving to cloud… ${done + 1} of ${list.length}`);
+    setStatus(`Sending to the QR gallery… ${done + 1} of ${list.length}`);
     await uploadItem(item);
     done++;
   }
 
-  const failedItems = list.filter(item => item.state === "failed");
-  const failed = failedItems.length;
+  const failed = list.filter(item => item.state === "failed");
+  const waiting = list.filter(item => item.state === "pending" && items.includes(item));
 
-  setStatus(
-    failed
-      ? `${failed} file(s) could not be saved (${failedItems[0].errorMessage || "unknown error"}). Click "Not saved" to retry.`
-      : "All memories saved. The QR gallery is up to date."
-  );
+  if (failed.length) {
+    setStatus(`${failed.length} file(s) could not be sent to the QR gallery (${failed[0].errorMessage || "unknown error"}). They are safe on this device. Click the red label to try again.`);
+  } else if (waiting.length) {
+    setStatus("Saved on this device. The QR gallery will update when the internet is back.");
+  } else {
+    setStatus("All memories are saved on this device and in the QR gallery.");
+  }
 
   syncOrder();
 }
 
-async function deleteFromCloud(item) {
-  if (!sb || !item.id) return;
+function retryUpload(item) {
+  setItemState(item, "pending");
+  cloudSync();
+}
 
-  await sb.from("memories").delete().eq("id", item.id);
+// Deleting from the cloud is remembered on this device, so it still
+// happens later if the internet is off right now.
+async function queueCloudDelete(list) {
+  const entries = list.filter(entry => entry.id || entry.path);
+  if (!entries.length || !dbOk) return;
 
-  if (item.path) {
-    await sb.storage.from(CONFIG.BUCKET).remove([item.path]);
+  try {
+    await dbRun(["deletes"], store => {
+      entries.forEach(entry => {
+        store("deletes").put({ key: `${entry.id || ""}|${entry.path || ""}`, id: entry.id || null, path: entry.path || null });
+      });
+    });
+  } catch (error) {
+    console.error(error);
+  }
+
+  cloudSync();
+}
+
+async function flushPendingDeletes() {
+  const pending = dbOk ? await dbGetAll("deletes") : [];
+  if (!pending.length) return true;
+
+  const client = ensureCloud();
+
+  try {
+    const ids = pending.map(entry => entry.id).filter(Boolean);
+    const paths = pending.map(entry => entry.path).filter(Boolean);
+
+    for (let i = 0; i < ids.length; i += 50) {
+      const { error } = await client.from("memories").delete().in("id", ids.slice(i, i + 50));
+      if (error) throw error;
+    }
+
+    for (let i = 0; i < paths.length; i += 100) {
+      const { error } = await client.storage.from(CONFIG.BUCKET).remove(paths.slice(i, i + 100));
+      if (error) throw error;
+    }
+
+    await dbRun(["deletes"], store => {
+      pending.forEach(entry => store("deletes").delete(entry.key));
+    });
+
+    return true;
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+}
+
+// New device / empty browser: copy what is in the QR gallery onto this
+// device ONCE. After that it is never downloaded again.
+async function downloadMissing() {
+  const rows = await fetchMemories();
+  const known = new Set(items.map(item => String(item.cloudId)));
+  const pending = dbOk ? await dbGetAll("deletes") : [];
+  const skip = new Set(pending.map(entry => String(entry.id)));
+
+  const missing = rows.filter(row => !known.has(String(row.id)) && !skip.has(String(row.id)));
+  let number = 0;
+
+  for (const row of missing) {
+    setStatus(`Saving memories on this device… ${++number} of ${missing.length}`);
+
+    try {
+      const response = await fetch(row.url);
+      if (!response.ok) throw new Error(`Download failed (${response.status})`);
+
+      const raw = await response.blob();
+      const kind = row.type === "video" ? "video" : "image";
+      const blob = raw.type
+        ? raw
+        : new Blob([raw], { type: kind === "video" ? "video/mp4" : "image/jpeg" });
+
+      const item = makeItem(blob, row.name || "memory", kind, {
+        caption: row.caption || "",
+        cloudId: row.id,
+        cloudPath: row.path,
+        cloudPos: row.position,
+        state: "saved"
+      });
+
+      await saveNewItem(item);
+
+      const wasEmpty = !items.length;
+      items.push(item);
+      refreshList(wasEmpty);
+    } catch (error) {
+      console.error(error);
+      break; // most likely the internet is off: try again next time
+    }
+  }
+
+  if (missing.length) setStatus(`${items.length} memories are saved on this device.`);
+}
+
+let syncing = false;
+let syncAgain = false;
+
+async function cloudSync() {
+  if (IS_GALLERY || !ensureCloud() || !navigator.onLine) return;
+
+  if (syncing) {
+    syncAgain = true;
+    return;
+  }
+
+  syncing = true;
+
+  try {
+    if (await flushPendingDeletes()) {
+      await uploadPending();
+      await downloadMissing();
+    }
+  } catch (error) {
+    console.error(error);
+    setStatus("The QR gallery cannot be reached right now. Your photos and videos still play from this device.");
+  }
+
+  syncing = false;
+
+  if (syncAgain) {
+    syncAgain = false;
+    cloudSync();
   }
 }
 
 const captionTimers = new Map();
 
 function syncCaption(item) {
-  if (!sb || !item.id) return;
+  if (!ensureCloud() || !item.cloudId) return;
 
   clearTimeout(captionTimers.get(item));
 
   captionTimers.set(item, setTimeout(() => {
+    if (!navigator.onLine) return;
+
     sb.from("memories")
       .update({ caption: item.caption })
-      .eq("id", item.id)
+      .eq("id", item.cloudId)
       .then(() => {});
   }, 700));
 }
 
 let orderTimer = null;
 
+// Only the rows whose position really changed are sent (saves internet)
 function syncOrder() {
-  if (!sb) return;
+  if (!ensureCloud() || !navigator.onLine) return;
 
   clearTimeout(orderTimer);
 
   orderTimer = setTimeout(() => {
     items.forEach((item, index) => {
-      if (item.id) {
+      if (item.cloudId && item.cloudPos !== index) {
+        item.cloudPos = index;
+
         sb.from("memories")
           .update({ position: index })
-          .eq("id", item.id)
+          .eq("id", item.cloudId)
           .then(() => {});
       }
     });
   }, 800);
 }
 
-async function loadSavedMemories() {
-  if (!sb) return;
-
+async function bootPresenter() {
   try {
-    const rows = await fetchMemories();
-
-    rows.forEach(row => {
-      items.push({
-        id: row.id,
-        name: row.name || "memory",
-        url: row.url,
-        type: row.type,
-        caption: row.caption || "",
-        file: null,
-        path: row.path,
-        state: "saved"
-      });
-    });
-
-    if (rows.length) {
-      render();
-      setStatus(`${rows.length} saved memories loaded.`);
-    }
+    await openDB();
+    dbOk = true;
   } catch (error) {
     console.error(error);
-    setStatus(`Could not load saved memories (${(error && error.message) || "unknown error"}). Check your Supabase key and run supabase-setup.sql.`);
+    setStatus("This browser cannot keep files after the page is closed (private window?). Please use a normal window.");
   }
+
+  if (dbOk) {
+    try {
+      await loadFromDevice();
+    } catch (error) {
+      console.error(error);
+    }
+
+    // ask the browser not to clear our saved files
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+  }
+
+  if (items.length) {
+    render();
+    setStatus(`${items.length} memories loaded from this device.`);
+  }
+
+  cloudSync();
 }
-     
 
 /* =========================================================
    GUEST GALLERY (page opened by scanning the QR code)
@@ -641,17 +949,24 @@ function scheduleCurrent() {
 
 /* ---------- Stunning extras: blurred backdrop, slow zoom, dots ---------- */
 
-// A blurred copy of the photo fills the empty sides of the stage
-function updateBackdrop(item, animate, intro) {
+// A blurred copy of the photo OR video fills the empty sides of the stage
+function updateBackdrop(item, media, animate, intro) {
   const olds = Array.from(stage.querySelectorAll(".stage-bg"));
 
-  if (item && item.type === "image") {
-    const bg = document.createElement("div");
+  if (item) {
+    const isVideo = item.type === "video";
+    const bg = document.createElement(isVideo ? "canvas" : "div");
     bg.className = "stage-bg";
-    bg.style.backgroundImage = `url("${item.url.replace(/"/g, "%22")}")`;
+
+    if (!isVideo) {
+      bg.style.backgroundImage = `url("${item.url.replace(/"/g, "%22")}")`;
+    }
+
     if (animate) bg.classList.add("fade");
     if (intro) bg.classList.add("intro");
     stage.appendChild(bg);
+
+    if (isVideo) mirrorVideo(media, bg);
   }
 
   if (animate) {
@@ -661,6 +976,50 @@ function updateBackdrop(item, animate, intro) {
   } else {
     olds.forEach(node => node.remove());
   }
+}
+
+// Copies the playing video into a tiny canvas (CSS blurs it). It uses the
+// same video file, so it needs no extra internet and stays in sync.
+function mirrorVideo(video, canvas) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  let last = 0;
+  let lastTime = -1;
+
+  function draw() {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (video.readyState < 2 || !vw || !vh) return;
+
+    const h = 72;
+    const w = Math.max(16, Math.round(h * vw / vh));
+
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+
+    try {
+      ctx.drawImage(video, 0, 0, w, h);
+      lastTime = video.currentTime;
+    } catch (error) {}
+  }
+
+  function loop(now) {
+    if (!canvas.isConnected) return; // backdrop was removed: stop
+
+    if (now - last >= 80) { // about 12 updates per second is plenty
+      last = now;
+      if (video.currentTime !== lastTime) draw();
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  video.addEventListener("loadeddata", draw);
+  video.addEventListener("seeked", draw);
+  requestAnimationFrame(loop);
 }
 
 // Slow zoom on photos (zooms in on one slide, out on the next)
@@ -776,7 +1135,7 @@ function render(animate = false, direction = "next") {
 
   stage.appendChild(newMedia);
 
-  updateBackdrop(items[current], doFlip, isIntro);
+  updateBackdrop(items[current], newMedia, doFlip, isIntro);
   startKenBurns(newMedia, items[current], doFlip);
 
   updateCaption(doFlip);
@@ -824,6 +1183,7 @@ function renderMediaList() {
     // only the caption changes: the video / timer is not restarted
     caption.addEventListener("input", event => {
       item.caption = event.target.value;
+      scheduleMetaSave(item);
       syncCaption(item);
 
       if (index === current) {
@@ -839,7 +1199,7 @@ function renderMediaList() {
       event.stopPropagation();
 
       if (item.state === "failed") {
-        uploadQueue([item]);
+        retryUpload(item);
       }
     });
 
@@ -885,42 +1245,67 @@ function renderMediaList() {
    LIST ACTIONS
    ========================================================= */
 
-function addFiles(fileList) {
-  const added = [];
+// After adding: the very first item needs a full render, otherwise only the
+// list and counter change (a playing video is not restarted).
+function refreshList(wasEmpty) {
+  if (wasEmpty) {
+    render();
+  } else {
+    updateCounter();
+    renderMediaList();
+  }
+}
 
-  for (const file of fileList) {
-    if (!/^(image|video)\//.test(file.type)) continue;
+async function addFiles(fileList) {
+  // copy first: the file input is cleared right after this call
+  const files = Array.from(fileList).filter(file => /^(image|video)\//.test(file.type));
+  if (!files.length) return;
 
-    const item = {
-      id: null,
-      name: file.name,
-      url: URL.createObjectURL(file),
-      type: file.type.startsWith("video/") ? "video" : "image",
-      caption: "",
-      file,
-      path: null,
-      state: sb ? "pending" : "local"
-    };
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+
+  const wasEmpty = !items.length;
+  let saved = 0;
+
+  for (const file of files) {
+    setStatus(`Saving on this device… ${saved + 1} of ${files.length}`);
+
+    const item = makeItem(file, file.name, file.type.startsWith("video/") ? "video" : "image");
+
+    try {
+      await saveNewItem(item);
+    } catch (error) {
+      console.error(error);
+      URL.revokeObjectURL(item.url);
+      setStatus(`Could not save "${file.name}". This device may be out of storage space. ${saved} file(s) were saved.`);
+      break;
+    }
 
     items.push(item);
-    added.push(item);
+    saved++;
   }
 
-  render();
+  if (!saved) return;
 
-  if (sb && added.length) {
-    uploadQueue(added);
-  }
+  refreshList(wasEmpty && items.length > 0);
+  saveOrderLocal();
+  setStatus(`${saved} file(s) saved on this device.`);
+  cloudSync();
 }
 
 function removeItem(index) {
   const [item] = items.splice(index, 1);
+  if (!item) return;
 
-  if (item.url.startsWith("blob:")) {
-    URL.revokeObjectURL(item.url);
+  URL.revokeObjectURL(item.url);
+
+  if (dbOk) {
+    dbRun(["meta", "blobs"], store => {
+      store("meta").delete(item.key);
+      store("blobs").delete(item.key);
+    }).catch(console.error);
   }
 
-  deleteFromCloud(item);
+  queueCloudDelete([{ id: item.cloudId, path: item.cloudPath }]);
 
   if (index < current) {
     current--;
@@ -929,7 +1314,44 @@ function removeItem(index) {
   }
 
   render();
+  saveOrderLocal();
   syncOrder();
+}
+
+async function removeAll() {
+  if (!items.length) {
+    setStatus("There is nothing to remove.");
+    return;
+  }
+
+  const count = items.length;
+
+  const sure = confirm(
+    `Remove all ${count} photos and videos from this site?\n\nThey will also be removed from the QR gallery. This cannot be undone.`
+  );
+
+  if (!sure) return;
+
+  stopSlideshow();
+
+  const all = items.splice(0, items.length);
+  all.forEach(item => URL.revokeObjectURL(item.url));
+
+  current = 0;
+  render();
+
+  try {
+    await dbRun(["meta", "blobs"], store => {
+      store("meta").clear();
+      store("blobs").clear();
+    });
+  } catch (error) {
+    console.error(error);
+  }
+
+  await queueCloudDelete(all.map(item => ({ id: item.cloudId, path: item.cloudPath })));
+
+  setStatus(`Removed all ${count} photos and videos.`);
 }
 
 function moveItem(index, direction) {
@@ -942,6 +1364,7 @@ function moveItem(index, direction) {
   [items[index], items[target]] = [items[target], items[index]];
   current = target;
   render();
+  saveOrderLocal();
   syncOrder();
 }
 
@@ -1115,7 +1538,10 @@ function shuffleAndPlay() {
 
   const canShuffle = items.length > 1;
 
-  if (canShuffle) shuffleItems();
+  if (canShuffle) {
+    shuffleItems();
+    saveOrderLocal();
+  }
 
   current = 0;
   render(canShuffle, "next");
@@ -1154,6 +1580,22 @@ $("fullscreen").addEventListener("click", toggleFullscreen);
 $("videoMute").addEventListener("click", toggleMute);
 $("presentation").addEventListener("click", togglePresentationMode);
 $("shuffle").addEventListener("click", shuffleAndPlay);
+$("removeAll").addEventListener("click", removeAll);
+
+// Internet comes and goes: the slideshow keeps playing from this device
+window.addEventListener("online", () => {
+  items.forEach(item => {
+    if (item.state === "failed") setItemState(item, "pending");
+  });
+
+  cloudSync();
+});
+
+window.addEventListener("offline", () => {
+  setStatus("No internet. That is fine: everything plays from this device.");
+});
+
+window.addEventListener("pagehide", flushMeta);
 
 // Seconds only affects photos; a playing video is never interrupted
 $("seconds").addEventListener("change", () => {
@@ -1223,11 +1665,6 @@ document.addEventListener("keydown", event => {
     return;
   }
 
-  if (event.key === "Escape" && !$("qrModal").hidden) {
-    $("qrModal").hidden = true;
-    return;
-  }
-
   const active = document.activeElement;
   const typing =
     active &&
@@ -1284,6 +1721,12 @@ if (IS_GALLERY) {
   render();
   updateHeader();
   updateMusicButton();
-  setupQR();
-  loadSavedMemories();
+  bootPresenter();
+}
+
+// Lets the page open even with no internet (see sw.js)
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
 }

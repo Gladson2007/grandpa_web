@@ -6,8 +6,7 @@
   <meta name="theme-color" content="#16243b">
   <title>Grandpa's Memories</title>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     :root {
@@ -21,7 +20,7 @@
       --gold: #24445D;
       --stage: #0b1524;
       --shadow: 0 18px 50px rgba(22, 36, 59, .16);
-      --stage-bg: #ffffff url("floral-bg.png") center / cover no-repeat;
+      --stage-bg: linear-gradient(135deg, #d6e7f5, #B7D2E8 55%, #B0E0E6);
     }
 
     * { box-sizing: border-box; }
@@ -819,6 +818,23 @@
       #stage .current-media.intro,
       .stage-bg.intro { animation: none; }
     }
+
+    /* =========================================================
+       BLURRED BACKGROUND FOR PHOTOS *AND* VIDEOS (no floral image)
+       ========================================================= */
+    #stage video { background: transparent; }
+    canvas.stage-bg {
+      width: calc(100% + 120px);
+      height: calc(100% + 120px);
+      object-fit: cover;
+      filter: blur(14px) brightness(.62) saturate(1.35);
+    }
+
+    /* Remove all + saved labels */
+    button.danger { background: #b3261e; box-shadow: 0 5px 14px rgba(179, 38, 30, .25); }
+    button.danger:hover { background: #8c1d18; }
+    .badge.saved { color: #1d6b3a; border-color: #9fd0b0; }
+    .badge.failed { color: #9a2b1f; border-color: #e0a79f; cursor: pointer; }
   </style>
 </head>
 
@@ -873,6 +889,7 @@
         </div>
       </div>
 
+      <p class="cloud-note">Everything you add is saved on this device. It stays after you close the site and keeps working with no internet. It is removed only when you press Remove or Remove all.</p>
       <p id="cloudNote" class="cloud-note"></p>
 
       <div class="upload-actions">
@@ -885,6 +902,8 @@
           ＋ Choose photos and videos
           <input id="filesInput" type="file" accept="image/*,video/*" multiple>
         </label>
+
+        <button id="removeAll" type="button" class="danger">🗑 Remove all</button>
       </div>
 
       <div id="mediaList"></div>
@@ -969,6 +988,6 @@
 
   <audio id="audio" loop></audio>
 
-  <script src="app.js?v=8"></script>
+  <script defer src="app.js?v=9"></script>
 </body>
 </html>
